@@ -43,8 +43,10 @@ fun UploadsScreen(rows: List<UploadRow>, wifiOnly: Boolean, onCancel: (UUID) -> 
     val p = LocalPlex.current
     val active = rows.filter { !it.state.isFinished }
     val done = rows.count { it.state == WorkInfo.State.SUCCEEDED }
-    val total = active.sumOf { it.size }
-    val sent = active.sumOf { it.done }
+    // Läuft nichts mehr: Summe der fertigen Uploads zeigen statt „0 B“
+    val shown = active.ifEmpty { rows.filter { it.state == WorkInfo.State.SUCCEEDED } }
+    val total = shown.sumOf { it.size }
+    val sent = shown.sumOf { it.done }
     val speed = active.filter { it.state == WorkInfo.State.RUNNING }.sumOf { it.speed }
     val pct = if (total > 0) sent.toFloat() / total else if (active.isEmpty() && rows.isNotEmpty()) 1f else 0f
 
@@ -82,7 +84,7 @@ fun UploadsScreen(rows: List<UploadRow>, wifiOnly: Boolean, onCancel: (UUID) -> 
                 colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = p.onAccent),
             ) {
                 PIcon(R.drawable.ic_camera, null, p.onAccent, 18.dp)
-                Text("  Foto aufnehmen", fontWeight = FontWeight.SemiBold)
+                Text("  Aufnehmen", fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -119,8 +121,10 @@ private fun UploadCard(r: UploadRow, onCancel: (UUID) -> Unit) {
     }
     Column(Modifier.fillMaxWidth().plexCard(low = true, shape = RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(36.dp).clip(RoundedCornerShape(9.dp)).background(p.accentSoft), contentAlignment = Alignment.Center) {
-                PIcon(R.drawable.ic_photo, null, p.accent, 18.dp)
+            val kind = kindOfName(r.name)
+            val tint = kindColor(kind)
+            Box(Modifier.size(36.dp).clip(RoundedCornerShape(9.dp)).background(tint.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                PIcon(kindIcon(kind), null, tint, 18.dp)
             }
             Column(Modifier.padding(start = 10.dp).weight(1f)) {
                 Text(r.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -144,4 +148,12 @@ fun OutlineAction(text: String, color: androidx.compose.ui.graphics.Color, onCli
     val p = LocalPlex.current
     OutlinedButton(onClick = onClick, modifier = modifier.height(48.dp), shape = RoundedCornerShape(14.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, p.border)) { Text(text, color = color, fontWeight = FontWeight.SemiBold) }
+}
+
+/** Art einer Datei nur aus dem Namen (die Upload-Liste kennt den Typ nicht) */
+fun kindOfName(name: String): com.paeffgen.plexcloud.data.CloudItem.Kind = when (name.substringAfterLast('.', "").lowercase()) {
+    "jpg", "jpeg", "png", "heic", "heif", "webp", "gif" -> com.paeffgen.plexcloud.data.CloudItem.Kind.Photo
+    "pdf" -> com.paeffgen.plexcloud.data.CloudItem.Kind.Pdf
+    "mp4", "mov", "3gp", "mkv", "webm" -> com.paeffgen.plexcloud.data.CloudItem.Kind.Video
+    else -> com.paeffgen.plexcloud.data.CloudItem.Kind.File
 }

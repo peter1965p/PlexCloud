@@ -83,7 +83,7 @@ fun SystemScreen(
         if (usage != null) {
             val limit = (usage.limit ?: 0L).coerceAtLeast(1)
             Row(Modifier.padding(horizontal = 20.dp, vertical = 10.dp).fillMaxWidth().plexCard(shape = RoundedCornerShape(18.dp)).padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Ring(listOf(usage.used.toFloat() / limit to p.accent), 112.dp, 10.dp, p.track) {
+                Ring(if (usage.limit == null) emptyList() else listOf((usage.used.toFloat() / limit).coerceIn(0f, 1f) to p.accent), 112.dp, 10.dp, p.track) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(Format.gb(usage.used), fontFamily = Mono, fontSize = 18.sp, color = p.text)
                         Text(if (usage.limit != null) "von ${Format.gb(usage.limit)} GB" else "unbegrenzt", style = MaterialTheme.typography.labelSmall, color = p.muted)

@@ -134,7 +134,8 @@ fun StorageCard(u: Usage) {
             Text(Format.gb(u.used) + " GB", style = MonoBody, color = p.text)
             Text(if (u.limit != null) " / ${Format.gb(u.limit)} GB" else " / unbegrenzt", style = MonoBody, color = p.muted)
         }
-        SegmentBar(listOf((u.used.toFloat() / limit) to p.accent))
+        // Unbegrenzt (Betreiber, Demo): kein Füllstand, sonst stünde der Balken immer auf voll
+        SegmentBar(if (u.limit == null) emptyList() else listOf((u.used.toFloat() / limit).coerceIn(0f, 1f) to p.accent))
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) { Dot(p.accent); Text("${u.files} Dateien", style = MonoSmall, color = p.textSoft) }
             if (u.limit != null) Text("${Format.gb((u.limit - u.used).coerceAtLeast(0))} GB frei", style = MonoSmall, color = p.textSoft)

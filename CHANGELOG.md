@@ -2,6 +2,12 @@
 
 Alle Versionen von PlexCloud für Android. Der Abschnitt einer Version erscheint in der App als „Was ist neu“.
 
+## [0.2.3] - 2026-11-16
+
+- Upload-Liste: PDFs, Videos und Fotos mit eigenem Symbol; nach dem Hochladen zeigt die Übersicht, was übertragen wurde, statt „0 B“
+- Speicheranzeige bei unbegrenztem Speicher nicht mehr als voll
+- Knopf „Aufnehmen“ statt „Foto aufnehmen“ (öffnet die Wahl Dokument oder Foto)
+
 ## [0.2.2] - 2026-11-16
 
 - Sicherer: Der Dokumentenscanner wird in der Release-Version nicht mehr wegoptimiert (Absturz-Schutz wie bei MHD Safety)
