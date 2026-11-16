@@ -63,7 +63,7 @@ fun BackupSection(
     val p = LocalPlex.current
     SectionLabel("Sicherung")
     Column(Modifier.padding(horizontal = 20.dp).fillMaxWidth().plexCard(shape = RoundedCornerShape(14.dp))) {
-        BackupRow("Fotos automatisch sichern", "Fotos nach Bilder/<Monat>, Ordner nach Dokumente") { PlexSwitch(ui.photos, onPhotos) }
+        BackupRow("Fotos automatisch sichern", "Fotos nach Bilder/<Jahr>, Ordner nach Dokumente") { PlexSwitch(ui.photos, onPhotos) }
         if (ui.photos) {
             HorizontalDivider(color = p.borderSoft)
             BackupRow("Alben", ui.albumNames.ifEmpty { listOf("alle") }.joinToString(", "), onClick = onAlbums) {

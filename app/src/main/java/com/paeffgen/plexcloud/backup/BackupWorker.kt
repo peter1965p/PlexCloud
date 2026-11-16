@@ -49,6 +49,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         var count = 0L
         return try {
             if (!s.moved.first()) { Umzug.run(app.api, remote); s.setMoved() }
+            if (!s.years.first()) { Jahresordner.run(app.api, remote); s.setYears() }
             if (photos && hasMediaPermission(applicationContext)) count += backupMedia(remote, videos, wifiOnly)
             for (f in folders) count += backupFolder(remote, f, wifiOnly)
             s.setLastBackup(System.currentTimeMillis(), count)
@@ -226,7 +227,7 @@ object Umzug {
                     if (kind.name != "Fotos") { api.move(kind.itemId, remote.ensure(listOf(BackupPaths.DOCS))); continue }
                     for (month in api.listing(kind.itemId).items.filter { it.folder }) {
                         for (f in api.listing(month.itemId).items.filter { !it.folder }) {
-                            val target = remote.ensure(listOf(if (f.contentType.startsWith("video/")) BackupPaths.VIDEOS else BackupPaths.PHOTOS, month.name))
+                            val target = remote.ensure(listOf(if (f.contentType.startsWith("video/")) BackupPaths.VIDEOS else BackupPaths.PHOTOS, BackupPaths.monthToYear(month.name) ?: month.name))
                             if (remote.hasLike(target, f.name, f.size)) api.trash(f.itemId)
                             else { api.move(f.itemId, target); remote.remember(target, f.name, f.size); moved++ }
                         }
@@ -234,6 +235,28 @@ object Umzug {
                 }
             }
             api.trash(root.itemId)
+        }
+        return moved
+    }
+}
+
+/**
+ * Einmaliger Umzug der Monatsordner (bis 0.2.7) in Jahresordner: Bilder/2026-11 → Bilder/2026, ebenso unter Videos.
+ * Doppelte (gleicher Name ohne „ (2)“, gleiche Größe) kommen in den Papierkorb, der leere Monatsordner danach auch.
+ */
+object Jahresordner {
+    suspend fun run(api: com.paeffgen.plexcloud.data.PlexCloudApi, remote: RemoteFolders): Int {
+        var moved = 0
+        for (top in api.listing(ROOT).items.filter { it.folder && (it.name.equals(BackupPaths.PHOTOS, true) || it.name.equals(BackupPaths.VIDEOS, true)) }) {
+            for (month in api.listing(top.itemId).items.filter { it.folder }) {
+                val year = BackupPaths.monthToYear(month.name) ?: continue
+                val target = remote.ensure(listOf(top.name, year))
+                for (f in api.listing(month.itemId).items) {
+                    if (!f.folder && remote.hasLike(target, f.name, f.size)) api.trash(f.itemId)
+                    else { api.move(f.itemId, target); if (!f.folder) remote.remember(target, f.name, f.size); moved++ }
+                }
+                api.trash(month.itemId)
+            }
         }
         return moved
     }

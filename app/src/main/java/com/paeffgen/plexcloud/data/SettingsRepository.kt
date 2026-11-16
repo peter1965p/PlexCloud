@@ -28,6 +28,7 @@ class SettingsRepository(private val context: Context) {
     private val lastBackupCountKey = longPreferencesKey("backup_last_count")
     private val albumsKey = stringSetPreferencesKey("backup_albums")
     private val movedKey = booleanPreferencesKey("backup_moved_v1")
+    private val yearsKey = booleanPreferencesKey("backup_years_v1")
 
     /** Akzentfarbe als ARGB */
     val accent: Flow<Long> = context.dataStore.data.map { it[accentKey] ?: DEFAULT_ACCENT }
@@ -63,6 +64,9 @@ class SettingsRepository(private val context: Context) {
     /** Umzug aus „Handy-Sicherung“ nach Bilder/Dokumente erledigt */
     val moved: Flow<Boolean> = context.dataStore.data.map { it[movedKey] ?: false }
     suspend fun setMoved() = context.dataStore.edit { it[movedKey] = true }
+    /** Monatsordner in Jahresordner umgezogen */
+    val years: Flow<Boolean> = context.dataStore.data.map { it[yearsKey] ?: false }
+    suspend fun setYears() = context.dataStore.edit { it[yearsKey] = true }
     suspend fun setLastBackup(atMs: Long, count: Long) = context.dataStore.edit { it[lastBackupKey] = atMs; it[lastBackupCountKey] = count }
 
     suspend fun setAccent(argb: Long) = context.dataStore.edit { it[accentKey] = argb }

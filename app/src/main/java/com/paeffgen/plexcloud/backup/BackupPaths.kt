@@ -12,7 +12,7 @@ object BackupPaths {
     const val DOCS = "Dokumente"
     /** Ziel bis 0.2.5: Handy-Sicherung/<Gerät>/Fotos/<Monat> (wird beim Umzug aufgelöst) */
     const val OLD_ROOT = "Handy-Sicherung"
-    private val month = DateTimeFormatter.ofPattern("yyyy-MM")
+    private val year = DateTimeFormatter.ofPattern("yyyy")
 
     /**
      * Gerätename als Ordnername. Zuerst der Name aus den Einstellungen des Handys („Galaxy A16 5G“),
@@ -25,9 +25,12 @@ object BackupPaths {
         return clean(raw).ifEmpty { "Android" }
     }
 
-    /** Fotos: Bilder/2026-11, Videos: Videos/2026-11 (Aufnahmemonat) */
+    /** Fotos: Bilder/2026, Videos: Videos/2026 (Aufnahmejahr, wie die Ordner auf dem Rechner) */
     fun mediaPath(takenMs: Long, video: Boolean = false, zone: ZoneId = ZoneId.systemDefault()): List<String> =
-        listOf(if (video) VIDEOS else PHOTOS, month.format(Instant.ofEpochMilli(takenMs).atZone(zone)))
+        listOf(if (video) VIDEOS else PHOTOS, year.format(Instant.ofEpochMilli(takenMs).atZone(zone)))
+
+    /** Monatsordner bis 0.2.7 („2026-11“) → Jahr („2026“); sonst null */
+    fun monthToYear(name: String): String? = Regex("^(\\d{4})-\\d{2}$").find(name.trim())?.groupValues?.get(1)
 
     /** Gesicherter Ordner: Dokumente/<Ordnername>/<Unterordner …> */
     fun folderPath(folderName: String, sub: List<String> = emptyList()): List<String> =

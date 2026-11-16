@@ -2,6 +2,11 @@
 
 Alle Versionen von PlexCloud für Android. Der Abschnitt einer Version erscheint in der App als „Was ist neu“.
 
+## [0.2.8] - 2026-11-16
+
+- Neu: Jahresordner statt Monatsordner. Fotos landen in **Bilder/2026**, Videos in **Videos/2026**, genau wie auf dem Rechner (passend zu PlexCloud für Linux)
+- Neu: Umzug beim ersten Lauf. Vorhandene Monatsordner (Bilder/2026-11 …) wandern in den Jahresordner; doppelte Kopien kommen dabei in den Papierkorb, danach der leere Monatsordner
+
 ## [0.2.7] - 2026-11-16
 
 - Neu: Profilbild. Nach der Anmeldung zeigt die App dein Bild oben rechts in „Dateien“ (Tippen öffnet „System“) und groß in „System“ mit deinem Namen. Es kommt aus deinem Plexora-Profil, sonst von Google; ohne Bild stehen dort deine Initialen

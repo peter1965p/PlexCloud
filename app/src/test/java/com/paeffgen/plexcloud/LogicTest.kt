@@ -145,10 +145,16 @@ class BackupTest {
         assertEquals("Android", com.paeffgen.plexcloud.backup.BackupPaths.deviceName("", "  "))
     }
 
-    @Test fun mediaGoesIntoMonthFolder() {
-        val ms = java.time.Instant.parse("2026-11-30T23:30:00Z").toEpochMilli() // in Berlin schon Dezember
-        assertEquals(listOf("Bilder", "2026-12"), com.paeffgen.plexcloud.backup.BackupPaths.mediaPath(ms, zone = berlin))
-        assertEquals(listOf("Videos", "2026-12"), com.paeffgen.plexcloud.backup.BackupPaths.mediaPath(ms, video = true, zone = berlin))
+    @Test fun mediaGoesIntoYearFolder() {
+        val ms = java.time.Instant.parse("2026-12-31T23:30:00Z").toEpochMilli() // in Berlin schon 2027
+        assertEquals(listOf("Bilder", "2027"), com.paeffgen.plexcloud.backup.BackupPaths.mediaPath(ms, zone = berlin))
+        assertEquals(listOf("Videos", "2027"), com.paeffgen.plexcloud.backup.BackupPaths.mediaPath(ms, video = true, zone = berlin))
+    }
+
+    @Test fun monthFolderToYear() {
+        val bp = com.paeffgen.plexcloud.backup.BackupPaths
+        assertEquals("2026", bp.monthToYear("2026-11")); assertEquals("2025", bp.monthToYear(" 2025-01 "))
+        assertEquals(null, bp.monthToYear("2026")); assertEquals(null, bp.monthToYear("Urlaub 2026-11")); assertEquals(null, bp.monthToYear("2026-1"))
     }
 
     @Test fun oldRootAndBaseName() {
