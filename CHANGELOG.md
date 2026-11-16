@@ -2,6 +2,10 @@
 
 Alle Versionen von PlexCloud für Android. Der Abschnitt einer Version erscheint in der App als „Was ist neu“.
 
+## [0.2.2] - 2026-11-16
+
+- Sicherer: Der Dokumentenscanner wird in der Release-Version nicht mehr wegoptimiert (Absturz-Schutz wie bei MHD Safety)
+
 ## [0.2.1] - 2026-11-16
 
 - Besser: Der Sicherungsordner heißt wie das Handy in den Einstellungen („Galaxy A16 5G“), nicht nach der Typnummer („SM-A166B“)

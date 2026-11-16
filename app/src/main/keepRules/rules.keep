@@ -2,3 +2,10 @@
 # Die App nutzt keine Reflexion; WorkManager-Worker werden über ihren Klassennamen gestartet.
 -keep class com.paeffgen.plexcloud.upload.UploadWorker { <init>(...); }
 -keep class com.paeffgen.plexcloud.update.UpdateWorker { <init>(...); }
+
+# ML Kit Dokumentenscanner: die Bibliothek bringt keine eigenen R8-Regeln mit und lädt ihre Bausteine per Reflexion
+# (bei MHD Safety ist die Release-Version daran schon einmal abgestürzt). Nicht umbauen lassen.
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_vision_document_scanner.** { *; }
+-keep class com.google.android.gms.internal.mlkit_common.** { *; }
+-keep class com.google.firebase.components.** { *; }
