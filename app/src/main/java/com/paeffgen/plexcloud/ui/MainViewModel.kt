@@ -9,6 +9,9 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.paeffgen.plexcloud.PlexCloudApp
+import com.paeffgen.plexcloud.backup.BackupWorker
+import com.paeffgen.plexcloud.data.BackupFolder
+import android.content.Intent
 import com.paeffgen.plexcloud.auth.AuthRepository
 import com.paeffgen.plexcloud.data.CloudItem
 import com.paeffgen.plexcloud.data.Crumb
@@ -74,6 +77,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val latencies = api.latencies
     val lastSync = api.lastSync
     val currentVersion = app.updates.currentVersion.toString()
+    val photoBackup = app.settings.photoBackup.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val videoBackup = app.settings.videoBackup.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val backupFolders = app.settings.folders.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val lastBackup = app.settings.lastBackup.stateIn(viewModelScope, SharingStarted.Eagerly, 0L to 0L)
 
     private val _tab = MutableStateFlow(Tab.Files)
     val tab: StateFlow<Tab> = _tab
@@ -98,6 +105,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch { tokens.collect { if (it != null) load(ROOT) } }
+        // Sicherung nach einem Neustart des Handys oder einem App-Update wieder einplanen
+        viewModelScope.launch {
+            if (app.settings.photoBackup.first() || app.settings.folders.first().isNotEmpty()) BackupWorker.schedule(app)
+        }
+    }
+
+    // ── Automatische Sicherung ──
+    /** includeExisting: auch alle vorhandenen Fotos, sonst nur ab jetzt */
+    fun enablePhotoBackup(includeExisting: Boolean) = viewModelScope.launch {
+        app.settings.setPhotoBackup(true, if (includeExisting) 0L else System.currentTimeMillis() / 1000)
+        BackupWorker.schedule(app)
+        BackupWorker.runNow(app)
+        events.send(UiEvent.Toast(if (includeExisting) "Sicherung läuft: alle Fotos werden hochgeladen" else "Neue Fotos werden ab jetzt gesichert"))
+    }
+
+    fun disablePhotoBackup() = viewModelScope.launch {
+        app.settings.setPhotoBackup(false, null)
+        if (app.settings.folders.first().isEmpty()) BackupWorker.cancel(app)
+    }
+
+    fun setVideoBackup(on: Boolean) = viewModelScope.launch { app.settings.setVideoBackup(on) }
+
+    /** Ordner aus dem Dateiauswähler des Systems: Zugriff dauerhaft merken, vorhandene Dateien gleich mitsichern */
+    fun addBackupFolder(uri: Uri) = viewModelScope.launch {
+        runCatching { app.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            .onFailure { events.send(UiEvent.Toast("Kein dauerhafter Zugriff auf diesen Ordner")); return@launch }
+        app.settings.putFolder(BackupFolder(uri.toString(), 0L))
+        BackupWorker.schedule(app)
+        BackupWorker.runNow(app)
+        events.send(UiEvent.Toast("Ordner wird gesichert"))
+    }
+
+    fun removeBackupFolder(uri: String) = viewModelScope.launch {
+        runCatching { app.contentResolver.releasePersistableUriPermission(Uri.parse(uri), Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        app.settings.removeFolder(uri)
+        if (!app.settings.photoBackup.first() && app.settings.folders.first().isEmpty()) BackupWorker.cancel(app)
+    }
+
+    fun backupNow() { BackupWorker.runNow(app); viewModelScope.launch { events.send(UiEvent.Toast("Sicherung gestartet")) } }
+
+    /** Fertiger Scan (PDF vom Dokumentenscanner): in den Cache kopieren und in den aktuellen Ordner hochladen */
+    fun scannedPdf(uri: Uri, pages: Int) = viewModelScope.launch {
+        val name = "Scan_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.GERMANY).format(Date())}.pdf"
+        val f = withContext(Dispatchers.IO) {
+            runCatching {
+                val dir = File(app.cacheDir, "camera").apply { mkdirs() }
+                File(dir, name).also { out -> app.contentResolver.openInputStream(uri)!!.use { i -> out.outputStream().use { i.copyTo(it) } } }
+            }.getOrNull()
+        }
+        if (f == null || f.length() == 0L) { events.send(UiEvent.Toast("Scan konnte nicht gelesen werden")); return@launch }
+        app.uploads.enqueue(f, name, "application/pdf", _folder.value.folderId, wifiOnly.value)
+        events.send(UiEvent.Toast("$pages ${if (pages == 1) "Seite" else "Seiten"} als PDF hochladen"))
+        _tab.value = Tab.Uploads
     }
 
     // ── Anmeldung ──

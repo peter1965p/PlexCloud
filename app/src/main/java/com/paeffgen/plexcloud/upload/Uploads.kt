@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit
 data class UploadRow(
     val id: UUID,
     val name: String,
+    val backup: Boolean,
     val size: Long,
     val state: WorkInfo.State,
     val done: Long,
@@ -32,6 +33,8 @@ data class UploadRow(
     val error: String?,
 )
 
+const val TAG_BACKUP = "backup"
+
 class Uploads(private val context: Context) {
     private val wm get() = WorkManager.getInstance(context)
 
@@ -40,7 +43,7 @@ class Uploads(private val context: Context) {
             val name = w.tags.firstOrNull { it.startsWith("n:") }?.removePrefix("n:").orEmpty()
             val size = w.tags.firstOrNull { it.startsWith("s:") }?.removePrefix("s:")?.toLongOrNull() ?: 0
             UploadRow(
-                id = w.id, name = name, size = size, state = w.state,
+                id = w.id, name = name, backup = TAG_BACKUP in w.tags, size = size, state = w.state,
                 done = if (w.state == WorkInfo.State.SUCCEEDED) size else w.progress.getLong(UploadWorker.P_DONE, 0),
                 speed = w.progress.getLong(UploadWorker.P_SPEED, 0),
                 part = w.progress.getInt(UploadWorker.P_PART, 0),
@@ -51,24 +54,34 @@ class Uploads(private val context: Context) {
         }.sortedWith(compareBy<UploadRow> { it.state.isFinished }.thenBy { it.name })
     }
 
-    /** Eine Datei aus dem App-Cache (Kamera-Foto oder Kopie einer geteilten Datei) einreihen */
-    fun enqueue(file: File, name: String, mime: String, parentId: String, wifiOnly: Boolean) {
+    /** Eine Datei aus dem App-Cache (Kamera-Foto, Scan oder Kopie einer geteilten Datei) einreihen; wird nach dem Upload gelöscht */
+    fun enqueue(file: File, name: String, mime: String, parentId: String, wifiOnly: Boolean) =
+        enqueue(Uri.fromFile(file), name, mime, file.length(), parentId, wifiOnly, deleteAfter = true)
+
+    /** Eine Datei über ihre Adresse einreihen (auch content:// aus der Galerie oder einem gesicherten Ordner, ohne Kopie) */
+    fun enqueue(uri: Uri, name: String, mime: String, size: Long, parentId: String, wifiOnly: Boolean, deleteAfter: Boolean = false, backup: Boolean = false) {
         val req = OneTimeWorkRequestBuilder<UploadWorker>()
             .setInputData(
                 workDataOf(
-                    UploadWorker.K_URI to Uri.fromFile(file).toString(),
+                    UploadWorker.K_URI to uri.toString(),
                     UploadWorker.K_NAME to name,
                     UploadWorker.K_MIME to mime,
-                    UploadWorker.K_SIZE to file.length(),
+                    UploadWorker.K_SIZE to size,
                     UploadWorker.K_PARENT to parentId,
-                    UploadWorker.K_DELETE to true,
+                    UploadWorker.K_DELETE to deleteAfter,
                 ),
             )
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED).build())
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+                    .setRequiresBatteryNotLow(backup)
+                    .build(),
+            )
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 20, TimeUnit.SECONDS)
             .addTag(UploadWorker.TAG)
+            .apply { if (backup) addTag(TAG_BACKUP) }
             .addTag("n:$name")
-            .addTag("s:${file.length()}")
+            .addTag("s:$size")
             .build()
         wm.enqueue(req)
     }

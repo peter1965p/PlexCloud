@@ -31,6 +31,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.activity.result.IntentSenderRequest
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
+import com.paeffgen.plexcloud.backup.BackupWorker
+import com.paeffgen.plexcloud.ui.BackupSection
+import com.paeffgen.plexcloud.ui.BackupUi
+import com.paeffgen.plexcloud.ui.CaptureSheet
+import com.paeffgen.plexcloud.ui.PhotoBackupDialog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -142,6 +154,49 @@ private fun Main(vm: MainViewModel, email: String) {
     LaunchedEffect(Unit) { if (Build.VERSION.SDK_INT >= 33) notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS) }
     val takePhoto = { runCatching { camera.launch(vm.newPhotoUri()) }.onFailure { Toast.makeText(ctx, "Keine Kamera-App gefunden", Toast.LENGTH_LONG).show() } }
 
+    // Dokumentenscanner (Google Play-Dienste): Kanten, Zuschnitt, bis 20 Seiten, Ergebnis als PDF
+    val scanner = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
+        val res = GmsDocumentScanningResult.fromActivityResultIntent(r.data)
+        val pdf = res?.pdf
+        if (r.resultCode == android.app.Activity.RESULT_OK && pdf != null) vm.scannedPdf(pdf.uri, pdf.pageCount)
+    }
+    val scanDocument = {
+        val activity = ctx as android.app.Activity
+        GmsDocumentScanning.getClient(
+            GmsDocumentScannerOptions.Builder()
+                .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+                .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_PDF)
+                .setGalleryImportAllowed(true)
+                .setPageLimit(20)
+                .build(),
+        ).getStartScanIntent(activity)
+            .addOnSuccessListener { scanner.launch(IntentSenderRequest.Builder(it).build()) }
+            .addOnFailureListener { Toast.makeText(ctx, "Scanner nicht verfügbar: ${it.message}", Toast.LENGTH_LONG).show() }
+        Unit
+    }
+    var captureChoice by remember { mutableStateOf(false) }
+    if (captureChoice) {
+        val label = "/" + folder.listing?.path.orEmpty().joinToString("/") { it.name }
+        CaptureSheet(label, onDocument = { captureChoice = false; scanDocument() }, onPhoto = { captureChoice = false; takePhoto() }, onDismiss = { captureChoice = false })
+    }
+
+    // Sicherung: Galerie-Recht und Ordnerauswahl
+    var photoDialog by remember { mutableStateOf(false) }
+    val mediaPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        if (BackupWorker.hasMediaPermission(ctx)) photoDialog = true
+        else Toast.makeText(ctx, "Ohne Zugriff auf Fotos kann PlexCloud nichts sichern", Toast.LENGTH_LONG).show()
+    }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> if (uri != null) vm.addBackupFolder(uri) }
+    if (photoDialog) PhotoBackupDialog(onChoice = { all -> photoDialog = false; vm.enablePhotoBackup(all) }, onDismiss = { photoDialog = false })
+    val askPhotos = {
+        val perms = when {
+            Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+            Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+            else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        if (BackupWorker.hasMediaPermission(ctx)) photoDialog = true else mediaPermission.launch(perms)
+    }
+
     BackHandler(enabled = detail != null || tab != Tab.Files || folder.folderId != ROOT) { vm.back() }
 
     Scaffold(
@@ -166,7 +221,7 @@ private fun Main(vm: MainViewModel, email: String) {
         },
         floatingActionButton = {
             if (tab == Tab.Files && detail == null) FloatingActionButton(
-                onClick = { takePhoto() }, containerColor = p.accent, contentColor = p.onAccent, shape = RoundedCornerShape(18.dp),
+                onClick = { captureChoice = true }, containerColor = p.accent, contentColor = p.onAccent, shape = RoundedCornerShape(18.dp),
                 modifier = Modifier.size(60.dp),
             ) { PIcon(R.drawable.ic_camera, "Foto aufnehmen und hochladen", p.onAccent, 26.dp) }
         },
@@ -186,7 +241,7 @@ private fun Main(vm: MainViewModel, email: String) {
                 Tab.Uploads -> {
                     val rows by vm.uploads.collectAsStateWithLifecycle()
                     val wifi by vm.wifiOnly.collectAsStateWithLifecycle()
-                    UploadsScreen(rows, wifi, vm::cancelUpload, vm::clearFinishedUploads) { takePhoto() }
+                    UploadsScreen(rows, wifi, vm::cancelUpload, vm::clearFinishedUploads) { captureChoice = true }
                 }
                 Tab.Recent -> {
                     val recent by vm.recent.collectAsStateWithLifecycle()
@@ -214,7 +269,20 @@ private fun Main(vm: MainViewModel, email: String) {
                         vm::setAccent, vm::setWifiOnly, vm::setAutoUpdate, { vm.checkForUpdates() },
                         { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/${BuildConfig.GITHUB_REPO}"))) },
                         vm::signOut,
-                    )
+                    ) {
+                        val photos by vm.photoBackup.collectAsStateWithLifecycle()
+                        val videos by vm.videoBackup.collectAsStateWithLifecycle()
+                        val folders by vm.backupFolders.collectAsStateWithLifecycle()
+                        val last by vm.lastBackup.collectAsStateWithLifecycle()
+                        BackupSection(
+                            BackupUi(photos, videos, folders, last.first, last.second),
+                            onPhotos = { on -> if (on) askPhotos() else vm.disablePhotoBackup() },
+                            onVideos = { vm.setVideoBackup(it) },
+                            onAddFolder = { folderPicker.launch(null) },
+                            onRemoveFolder = { vm.removeBackupFolder(it) },
+                            onNow = { vm.backupNow() },
+                        )
+                    }
                 }
             }
         }

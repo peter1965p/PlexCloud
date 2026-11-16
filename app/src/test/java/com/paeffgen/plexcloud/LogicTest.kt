@@ -134,3 +134,32 @@ class UpdateTest {
     @Test fun versionFromLocation() =
         assertEquals(Version(1, 3, 0), UpdateSupport.versionFromReleaseLocation("https://github.com/x/y/releases/tag/v1.3.0"))
 }
+
+class BackupTest {
+    private val berlin = java.time.ZoneId.of("Europe/Berlin")
+
+    @Test fun deviceNameWithoutDoubleManufacturer() {
+        assertEquals("Google Pixel 8 Pro", com.paeffgen.plexcloud.backup.BackupPaths.deviceName("Google", "Pixel 8 Pro"))
+        assertEquals("OnePlus 12", com.paeffgen.plexcloud.backup.BackupPaths.deviceName("OnePlus", "OnePlus 12"))
+        assertEquals("Samsung SM-S918B", com.paeffgen.plexcloud.backup.BackupPaths.deviceName("samsung", "SM-S918B"))
+        assertEquals("Android", com.paeffgen.plexcloud.backup.BackupPaths.deviceName("", "  "))
+    }
+
+    @Test fun mediaGoesIntoMonthFolder() {
+        val ms = java.time.Instant.parse("2026-11-30T23:30:00Z").toEpochMilli() // in Berlin schon Dezember
+        assertEquals(listOf("Handy-Sicherung", "Pixel 8", "Fotos", "2026-12"), com.paeffgen.plexcloud.backup.BackupPaths.mediaPath("Pixel 8", ms, berlin))
+    }
+
+    @Test fun folderPathIsCleaned() {
+        assertEquals(listOf("Handy-Sicherung", "Pixel 8", "Download", "Rechnungen 2026"),
+            com.paeffgen.plexcloud.backup.BackupPaths.folderPath("Pixel 8", "Download", listOf("Rechnungen/2026")))
+        assertEquals("a b", com.paeffgen.plexcloud.backup.BackupPaths.clean("a:*?\"<>|b"))
+    }
+
+    @Test fun backupFolderRoundTrip() {
+        val f = com.paeffgen.plexcloud.data.BackupFolder("content://com.android.externalstorage.documents/tree/primary%3ADownload", 1_700_000_000_000)
+        assertEquals(f, com.paeffgen.plexcloud.data.BackupFolder.decode(f.encode()))
+        assertNull(com.paeffgen.plexcloud.data.BackupFolder.decode("kaputt"))
+        assertNull(com.paeffgen.plexcloud.data.BackupFolder.decode("12|"))
+    }
+}

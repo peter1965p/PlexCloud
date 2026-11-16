@@ -70,6 +70,7 @@ fun SystemScreen(
     onCheckUpdate: () -> Unit,
     onSource: () -> Unit,
     onSignOut: () -> Unit,
+    backup: @Composable () -> Unit = {},
 ) {
     val p = LocalPlex.current
     var custom by remember { mutableStateOf(false) }
@@ -110,6 +111,8 @@ fun SystemScreen(
             StatBox("Sync", Format.ago(lastSync), p.text, Modifier.weight(1f))
         }
         Sparkline(latencies, Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp).fillMaxWidth().height(44.dp))
+
+        backup()
 
         SectionLabel("Akzentfarbe  ${Format.hex(accent)}")
         Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
