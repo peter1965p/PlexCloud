@@ -81,6 +81,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val videoBackup = app.settings.videoBackup.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val backupFolders = app.settings.folders.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val lastBackup = app.settings.lastBackup.stateIn(viewModelScope, SharingStarted.Eagerly, 0L to 0L)
+    val backupAlbums = app.settings.albums.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+    private val _albums = MutableStateFlow<List<com.paeffgen.plexcloud.backup.Album>>(emptyList())
+    /** Alben der Galerie (geladen, wenn der Auswahl-Dialog aufgeht) */
+    val albums: StateFlow<List<com.paeffgen.plexcloud.backup.Album>> = _albums
 
     private val _tab = MutableStateFlow(Tab.Files)
     val tab: StateFlow<Tab> = _tab
@@ -112,8 +116,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ── Automatische Sicherung ──
-    /** includeExisting: auch alle vorhandenen Fotos, sonst nur ab jetzt */
-    fun enablePhotoBackup(includeExisting: Boolean) = viewModelScope.launch {
+    fun loadAlbums() = viewModelScope.launch {
+        _albums.value = withContext(Dispatchers.IO) { com.paeffgen.plexcloud.backup.Albums.list(app) }
+    }
+
+    /** Auswahl ändern, ohne den Stand zurückzusetzen (gilt für neue Fotos) */
+    fun setAlbums(ids: Set<String>) = viewModelScope.launch { app.settings.setAlbums(ids) }
+
+    /**
+     * Sicherung abbrechen: wartende Uploads stoppen und den Stand auf jetzt setzen,
+     * sonst holt der nächste Lauf die übrigen alten Fotos doch noch. Ab jetzt nur neue Fotos (wenn die Sicherung an bleibt).
+     */
+    fun cancelBackup() = viewModelScope.launch {
+        BackupWorker.stopRunning(app)
+        app.uploads.cancelBackupUploads()
+        app.settings.setPhotoSince(System.currentTimeMillis() / 1000)
+        if (app.settings.photoBackup.first()) BackupWorker.watchGallery(app, androidx.work.ExistingWorkPolicy.KEEP)
+        events.send(UiEvent.Toast("Sicherung abgebrochen. Hochgeladenes bleibt in PlexCloud, ab jetzt nur neue Fotos"))
+    }
+
+    /** includeExisting: auch alle vorhandenen Fotos, sonst nur ab jetzt; albums: gewählte Alben (leer = alle) */
+    fun enablePhotoBackup(includeExisting: Boolean, albums: Set<String> = emptySet()) = viewModelScope.launch {
+        app.settings.setAlbums(albums)
         app.settings.setPhotoBackup(true, if (includeExisting) 0L else System.currentTimeMillis() / 1000)
         BackupWorker.schedule(app)
         BackupWorker.runNow(app)

@@ -8,6 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +41,10 @@ data class BackupUi(
     val lastCount: Long,
     /** vom Energiesparen ausgenommen (sonst stoppt z. B. Samsung die Sicherung im Hintergrund) */
     val batteryOk: Boolean = true,
+    /** Namen der gewählten Alben (leer = alle) */
+    val albumNames: List<String> = emptyList(),
+    /** Sicherungs-Uploads, die noch warten oder laufen */
+    val pending: Int = 0,
 )
 
 /** Bereich „Sicherung“ unter „System“: Fotos/Videos automatisch, gewählte Ordner, Stand */
@@ -48,12 +57,18 @@ fun BackupSection(
     onRemoveFolder: (String) -> Unit,
     onNow: () -> Unit,
     onBattery: () -> Unit = {},
+    onAlbums: () -> Unit = {},
+    onCancel: () -> Unit = {},
 ) {
     val p = LocalPlex.current
     SectionLabel("Sicherung")
     Column(Modifier.padding(horizontal = 20.dp).fillMaxWidth().plexCard(shape = RoundedCornerShape(14.dp))) {
         BackupRow("Fotos automatisch sichern", "Neue Fotos landen in Handy-Sicherung/<Gerät>/Fotos") { PlexSwitch(ui.photos, onPhotos) }
         if (ui.photos) {
+            HorizontalDivider(color = p.borderSoft)
+            BackupRow("Alben", ui.albumNames.ifEmpty { listOf("alle") }.joinToString(", "), onClick = onAlbums) {
+                Text("ändern", style = MaterialTheme.typography.labelMedium, color = p.accent)
+            }
             HorizontalDivider(color = p.borderSoft)
             BackupRow("Auch Videos", "Videos sind groß: am besten nur im WLAN") { PlexSwitch(ui.videos, onVideos) }
         }
@@ -72,6 +87,12 @@ fun BackupSection(
         Row(Modifier.fillMaxWidth().clickable(onClick = onAddFolder).padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             PIcon(R.drawable.ic_folder_plus, null, p.accent, 18.dp)
             Text("  Ordner sichern (z. B. Download, Dokumente)", style = MaterialTheme.typography.bodyLarge, color = p.accent)
+        }
+        if (ui.pending > 0) {
+            HorizontalDivider(color = p.borderSoft)
+            BackupRow("${ui.pending} Dateien in der Warteschlange", "Tippen: Sicherung abbrechen, ab jetzt nur Neues", onClick = onCancel) {
+                PIcon(R.drawable.ic_close, null, p.danger, 18.dp)
+            }
         }
         if ((ui.photos || ui.folders.isNotEmpty()) && !ui.batteryOk) {
             HorizontalDivider(color = p.borderSoft)
@@ -109,17 +130,61 @@ fun folderLabel(treeUri: String): String {
     return doc.substringAfter(':', doc).ifEmpty { "Interner Speicher" }
 }
 
-/** Beim Einschalten fragen: nur neue Fotos oder auch alle vorhandenen? */
+/**
+ * Alben wählen. Beim Einschalten (enabling) zusätzlich: nur neue oder auch vorhandene Fotos.
+ * Vorauswahl beim ersten Mal: nur „Camera“ (eigene Fotos), nicht WhatsApp, Screenshots & Co.
+ */
 @Composable
-fun PhotoBackupDialog(onChoice: (includeExisting: Boolean) -> Unit, onDismiss: () -> Unit) {
+fun AlbumDialog(
+    albums: List<com.paeffgen.plexcloud.backup.Album>,
+    selected: Set<String>,
+    enabling: Boolean,
+    onConfirm: (ids: Set<String>, includeExisting: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
     val p = LocalPlex.current
-    var busy by remember { mutableStateOf(false) }
+    val start = remember(albums) {
+        when {
+            selected.isNotEmpty() -> selected
+            enabling -> albums.filter { it.name.equals("Camera", true) || it.name.equals("Kamera", true) }.map { it.id }.toSet().ifEmpty { albums.map { it.id }.toSet() }
+            else -> albums.map { it.id }.toSet()
+        }
+    }
+    var pick by remember(start) { mutableStateOf(start) }
+    var existing by remember { mutableStateOf(false) }
+    val count = albums.filter { it.id in pick }.sumOf { it.photos + it.videos }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = p.surface,
-        title = { Text("Fotos sichern") },
-        text = { Text("Sollen auch die Fotos hochgeladen werden, die schon auf dem Handy sind? Das kann je nach Menge eine Weile dauern und Speicher kosten.", color = p.textSoft) },
-        confirmButton = { TextButton(enabled = !busy, onClick = { busy = true; onChoice(true) }) { Text("Alle Fotos", color = p.accent) } },
-        dismissButton = { TextButton(enabled = !busy, onClick = { busy = true; onChoice(false) }) { Text("Nur neue", color = p.textSoft) } },
+        title = { Text(if (enabling) "Was soll gesichert werden?" else "Alben für die Sicherung") },
+        text = {
+            Column {
+                if (albums.isEmpty()) Text("Keine Alben gefunden.", color = p.muted)
+                Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
+                    albums.forEach { a ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { pick = if (a.id in pick) pick - a.id else pick + a.id }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(a.id in pick, { on -> pick = if (on) pick + a.id else pick - a.id }, colors = CheckboxDefaults.colors(checkedColor = p.accent, checkmarkColor = p.onAccent))
+                            Text(a.name, color = p.text, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${a.photos + a.videos}", style = MonoSmall, color = p.muted)
+                        }
+                    }
+                }
+                if (enabling) {
+                    HorizontalDivider(color = p.borderSoft, modifier = Modifier.padding(vertical = 8.dp))
+                    Row(Modifier.fillMaxWidth().clickable { existing = !existing }, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Auch vorhandene sichern", color = p.text)
+                            Text(if (existing) "$count Dateien werden hochgeladen" else "nur, was ab jetzt dazukommt", style = MonoSmall, color = p.muted)
+                        }
+                        PlexSwitch(existing) { existing = it }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(enabled = pick.isNotEmpty(), onClick = { onConfirm(pick, existing) }) { Text(if (enabling) "Sicherung starten" else "Übernehmen", color = p.accent) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen", color = p.textSoft) } },
     )
 }

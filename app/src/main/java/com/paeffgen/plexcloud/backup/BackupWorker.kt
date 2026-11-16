@@ -58,6 +58,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     /** Galerie: alles mit DATE_ADDED nach dem gemerkten Stand, älteste zuerst, höchstens 500 je Lauf */
     private suspend fun backupMedia(remote: RemoteFolders, device: String, videos: Boolean, wifiOnly: Boolean): Long {
         var since = app.settings.photoSince.first()
+        val albums = app.settings.albums.first()
         var n = 0L
         val sources = buildList {
             add(MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
@@ -67,7 +68,8 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         for (src in sources) {
             val cols = arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.SIZE,
                 MediaStore.MediaColumns.MIME_TYPE, MediaStore.MediaColumns.DATE_ADDED, MediaStore.MediaColumns.DATE_TAKEN)
-            applicationContext.contentResolver.query(src, cols, "${MediaStore.MediaColumns.DATE_ADDED} > ?", arrayOf(since.toString()),
+            val albumFilter = if (albums.isEmpty()) "" else " AND ${MediaStore.MediaColumns.BUCKET_ID} IN (${albums.joinToString(",") { "?" }})"
+            applicationContext.contentResolver.query(src, cols, "${MediaStore.MediaColumns.DATE_ADDED} > ?$albumFilter", arrayOf(since.toString()) + albums,
                 "${MediaStore.MediaColumns.DATE_ADDED} ASC")?.use { c ->
                 while (c.moveToNext() && found.size < 500) {
                     val size = c.getLong(2)
@@ -153,6 +155,9 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.KEEP, OneTimeWorkRequestBuilder<BackupWorker>().build())
         }
 
+        /** Laufenden Sofort-Lauf stoppen (beim Abbrechen) */
+        fun stopRunning(context: Context) { WorkManager.getInstance(context).cancelUniqueWork(NOW); WorkManager.getInstance(context).cancelUniqueWork(ON_CHANGE) }
+
         fun cancel(context: Context) {
             val wm = WorkManager.getInstance(context)
             wm.cancelUniqueWork(PERIODIC); wm.cancelUniqueWork(ON_CHANGE)
@@ -176,5 +181,29 @@ class RemoteFolders(private val api: com.paeffgen.plexcloud.data.PlexCloudApi) {
             cache[key.toString()] = parent
         }
         return parent
+    }
+}
+
+/** Ein Album der Galerie (Kamera, Screenshots, WhatsApp …) mit Anzahl Fotos und Videos */
+data class Album(val id: String, val name: String, val photos: Int, val videos: Int)
+
+object Albums {
+    /** Alle Alben, größte zuerst; „Camera“ steht immer oben */
+    fun list(context: Context): List<Album> {
+        val map = LinkedHashMap<String, IntArray>()
+        val names = HashMap<String, String>()
+        listOf(MediaStore.Images.Media.EXTERNAL_CONTENT_URI to 0, MediaStore.Video.Media.EXTERNAL_CONTENT_URI to 1).forEach { (src, slot) ->
+            runCatching {
+                context.contentResolver.query(src, arrayOf(MediaStore.MediaColumns.BUCKET_ID, MediaStore.MediaColumns.BUCKET_DISPLAY_NAME), null, null, null)?.use { c ->
+                    while (c.moveToNext()) {
+                        val id = c.getString(0) ?: continue
+                        names.getOrPut(id) { c.getString(1) ?: "Ohne Namen" }
+                        map.getOrPut(id) { IntArray(2) }[slot]++
+                    }
+                }
+            }
+        }
+        return map.map { (id, n) -> Album(id, names[id] ?: id, n[0], n[1]) }
+            .sortedWith(compareByDescending<Album> { it.name.equals("Camera", true) || it.name.equals("Kamera", true) }.thenByDescending { it.photos + it.videos })
     }
 }

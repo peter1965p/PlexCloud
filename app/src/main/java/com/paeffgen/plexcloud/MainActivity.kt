@@ -44,7 +44,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.paeffgen.plexcloud.ui.BackupSection
 import com.paeffgen.plexcloud.ui.BackupUi
 import com.paeffgen.plexcloud.ui.CaptureSheet
-import com.paeffgen.plexcloud.ui.PhotoBackupDialog
+import com.paeffgen.plexcloud.ui.AlbumDialog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -183,9 +183,10 @@ private fun Main(vm: MainViewModel, email: String) {
     }
 
     // Sicherung: Galerie-Recht und Ordnerauswahl
-    var photoDialog by remember { mutableStateOf(false) }
+    // Album-Dialog: null = zu, true = beim Einschalten, false = Auswahl ändern
+    var albumDialog by remember { mutableStateOf<Boolean?>(null) }
     val mediaPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        if (BackupWorker.hasMediaPermission(ctx)) photoDialog = true
+        if (BackupWorker.hasMediaPermission(ctx)) { vm.loadAlbums(); albumDialog = true }
         else Toast.makeText(ctx, "Ohne Zugriff auf Fotos kann PlexCloud nichts sichern", Toast.LENGTH_LONG).show()
     }
     // Energiesparen: Zustand bei jeder Rückkehr in die App neu lesen (der Nutzer ändert ihn im System-Dialog)
@@ -199,14 +200,27 @@ private fun Main(vm: MainViewModel, email: String) {
         Unit
     }
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> if (uri != null) { vm.addBackupFolder(uri); askBattery() } }
-    if (photoDialog) PhotoBackupDialog(onChoice = { all -> photoDialog = false; vm.enablePhotoBackup(all); askBattery() }, onDismiss = { photoDialog = false })
+    albumDialog?.let { enabling ->
+        val albums by vm.albums.collectAsStateWithLifecycle()
+        val chosen by vm.backupAlbums.collectAsStateWithLifecycle()
+        AlbumDialog(
+            albums, if (enabling) emptySet() else chosen, enabling,
+            onConfirm = { ids, existing ->
+                albumDialog = null
+                // alle angehakt = „alle“ (dann kommen auch neue Alben automatisch dazu)
+                val sel = if (ids.size == albums.size) emptySet() else ids
+                if (enabling) { vm.enablePhotoBackup(existing, sel); askBattery() } else vm.setAlbums(sel)
+            },
+            onDismiss = { albumDialog = null },
+        )
+    }
     val askPhotos = {
         val perms = when {
             Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
             Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
             else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
-        if (BackupWorker.hasMediaPermission(ctx)) photoDialog = true else mediaPermission.launch(perms)
+        if (BackupWorker.hasMediaPermission(ctx)) { vm.loadAlbums(); albumDialog = true } else mediaPermission.launch(perms)
     }
 
     BackHandler(enabled = detail != null || tab != Tab.Files || folder.folderId != ROOT) { vm.back() }
@@ -253,7 +267,7 @@ private fun Main(vm: MainViewModel, email: String) {
                 Tab.Uploads -> {
                     val rows by vm.uploads.collectAsStateWithLifecycle()
                     val wifi by vm.wifiOnly.collectAsStateWithLifecycle()
-                    UploadsScreen(rows, wifi, vm::cancelUpload, vm::clearFinishedUploads) { captureChoice = true }
+                    UploadsScreen(rows, wifi, vm::cancelUpload, vm::clearFinishedUploads, { vm.cancelBackup() }) { captureChoice = true }
                 }
                 Tab.Recent -> {
                     val recent by vm.recent.collectAsStateWithLifecycle()
@@ -286,14 +300,22 @@ private fun Main(vm: MainViewModel, email: String) {
                         val videos by vm.videoBackup.collectAsStateWithLifecycle()
                         val folders by vm.backupFolders.collectAsStateWithLifecycle()
                         val last by vm.lastBackup.collectAsStateWithLifecycle()
+                        val chosen by vm.backupAlbums.collectAsStateWithLifecycle()
+                        val albums by vm.albums.collectAsStateWithLifecycle()
+                        val rows by vm.uploads.collectAsStateWithLifecycle()
+                        LaunchedEffect(photos) { if (photos) vm.loadAlbums() }
                         BackupSection(
-                            BackupUi(photos, videos, folders, last.first, last.second, batteryOk),
+                            BackupUi(photos, videos, folders, last.first, last.second, batteryOk,
+                                albumNames = albums.filter { it.id in chosen }.map { it.name },
+                                pending = rows.count { it.backup && !it.state.isFinished }),
                             onPhotos = { on -> if (on) askPhotos() else vm.disablePhotoBackup() },
                             onVideos = { vm.setVideoBackup(it) },
                             onAddFolder = { folderPicker.launch(null) },
                             onRemoveFolder = { vm.removeBackupFolder(it) },
                             onNow = { vm.backupNow() },
                             onBattery = { askBattery() },
+                            onAlbums = { vm.loadAlbums(); albumDialog = false },
+                            onCancel = { vm.cancelBackup() },
                         )
                     }
                 }

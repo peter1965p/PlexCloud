@@ -39,7 +39,7 @@ import com.paeffgen.plexcloud.upload.UploadRow
 import java.util.UUID
 
 @Composable
-fun UploadsScreen(rows: List<UploadRow>, wifiOnly: Boolean, onCancel: (UUID) -> Unit, onClear: () -> Unit, onCamera: () -> Unit) {
+fun UploadsScreen(rows: List<UploadRow>, wifiOnly: Boolean, onCancel: (UUID) -> Unit, onClear: () -> Unit, onCancelBackup: () -> Unit = {}, onCamera: () -> Unit) {
     val p = LocalPlex.current
     val active = rows.filter { !it.state.isFinished }
     val done = rows.count { it.state == WorkInfo.State.SUCCEEDED }
@@ -56,6 +56,8 @@ fun UploadsScreen(rows: List<UploadRow>, wifiOnly: Boolean, onCancel: (UUID) -> 
                 Text("Uploads", style = MaterialTheme.typography.titleLarge, color = p.text)
                 Text("${active.size} aktiv · $done fertig · ${if (wifiOnly) "nur WLAN" else "jedes Netz"}", style = MonoSmall, color = p.muted)
             }
+            val backupPending = rows.count { it.backup && !it.state.isFinished }
+            if (backupPending > 0) androidx.compose.material3.TextButton(onClick = onCancelBackup) { Text("Sicherung abbrechen ($backupPending)", color = p.danger) }
             if (rows.any { it.state.isFinished }) IconButton(onClick = onClear) { PIcon(R.drawable.ic_trash, "Fertige aus der Liste nehmen", p.textSoft) }
         }
 

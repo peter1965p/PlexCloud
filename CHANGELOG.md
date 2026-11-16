@@ -2,6 +2,12 @@
 
 Alle Versionen von PlexCloud für Android. Der Abschnitt einer Version erscheint in der App als „Was ist neu“.
 
+## [0.2.4] - 2026-11-16
+
+- Neu: Sicherung abbrechen. Unter „Uploads“ und „System“ stoppt ein Tipp alle wartenden Sicherungs-Uploads; Hochgeladenes bleibt, ab dann nur neue Fotos
+- Neu: Alben wählen. Beim Einschalten der Sicherung zeigt die App die Alben (Kamera, Screenshots, WhatsApp …) mit Anzahl; vorausgewählt ist nur die Kamera. Unter „System → Sicherung → Alben“ jederzeit änderbar
+- „Auch vorhandene sichern“ ist jetzt ein Schalter im selben Dialog und zeigt, wie viele Dateien das wären
+
 ## [0.2.3] - 2026-11-16
 
 - Upload-Liste: PDFs, Videos und Fotos mit eigenem Symbol; nach dem Hochladen zeigt die Übersicht, was übertragen wurde, statt „0 B“

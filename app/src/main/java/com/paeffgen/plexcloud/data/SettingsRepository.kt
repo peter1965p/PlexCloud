@@ -26,6 +26,7 @@ class SettingsRepository(private val context: Context) {
     private val foldersKey = stringSetPreferencesKey("backup_folders")
     private val lastBackupKey = longPreferencesKey("backup_last_run")
     private val lastBackupCountKey = longPreferencesKey("backup_last_count")
+    private val albumsKey = stringSetPreferencesKey("backup_albums")
 
     /** Akzentfarbe als ARGB */
     val accent: Flow<Long> = context.dataStore.data.map { it[accentKey] ?: DEFAULT_ACCENT }
@@ -41,6 +42,9 @@ class SettingsRepository(private val context: Context) {
     val photoSince: Flow<Long> = context.dataStore.data.map { it[photoSinceKey] ?: 0L }
     /** Gesicherte Ordner mit Stand: "<ms>|<tree-uri>" */
     val folders: Flow<List<BackupFolder>> = context.dataStore.data.map { p -> (p[foldersKey] ?: emptySet()).mapNotNull(BackupFolder::decode).sortedBy { it.uri } }
+    /** Gewählte Alben (MediaStore BUCKET_ID); leer = alle */
+    val albums: Flow<Set<String>> = context.dataStore.data.map { it[albumsKey] ?: emptySet() }
+    suspend fun setAlbums(ids: Set<String>) = context.dataStore.edit { it[albumsKey] = ids }
     val lastBackup: Flow<Pair<Long, Long>> = context.dataStore.data.map { (it[lastBackupKey] ?: 0L) to (it[lastBackupCountKey] ?: 0L) }
 
     suspend fun setPhotoBackup(on: Boolean, sinceSec: Long?) = context.dataStore.edit { p ->

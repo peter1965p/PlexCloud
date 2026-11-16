@@ -88,6 +88,9 @@ class Uploads(private val context: Context) {
 
     fun cancel(id: UUID) { wm.cancelWorkById(id) }
 
+    /** Alle Uploads der automatischen Sicherung stoppen, die noch warten oder laufen (fertige bleiben in PlexCloud) */
+    fun cancelBackupUploads() { wm.cancelAllWorkByTag(TAG_BACKUP) }
+
     /** Fertige und fehlgeschlagene Einträge aus der Liste nehmen */
     fun clearFinished() { wm.pruneWork() }
 
