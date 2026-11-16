@@ -181,3 +181,26 @@ class DeviceNameTest {
         assertEquals("Peters Handy", com.paeffgen.plexcloud.backup.BackupPaths.deviceName("samsung", "SM-A166B", "Peters/Handy"))
     }
 }
+
+class ProfileTest {
+    private val token = JSONObject("""{"email":"peter@example.de","given_name":"Peter","family_name":"Päffgen","picture":"https://lh3.googleusercontent.com/a/abc=s96-c"}""")
+
+    @Test fun googlePictureAndNameFromToken() {
+        val p = com.paeffgen.plexcloud.data.Profile.from(token, null)
+        assertEquals("Peter Päffgen", p.name)
+        assertEquals("PP", p.initials)
+        assertEquals("https://lh3.googleusercontent.com/a/abc=s256-c", p.pictureUrl)
+    }
+
+    @Test fun plexoraProfileWins() {
+        val p = com.paeffgen.plexcloud.data.Profile.from(token, JSONObject("""{"profile":{"name":"Krebsi Chef","avatarUrl":"https://cdn.example/a.png"}}"""))
+        assertEquals("Krebsi Chef", p.name)
+        assertEquals("https://cdn.example/a.png", p.pictureUrl)
+    }
+
+    @Test fun withoutPictureOnlyInitials() {
+        val p = com.paeffgen.plexcloud.data.Profile.from(JSONObject("""{"email":"anna.berg@x.de","picture":"http://unsicher"}"""), null)
+        assertNull(p.pictureUrl)
+        assertEquals("AB", p.initials)
+    }
+}

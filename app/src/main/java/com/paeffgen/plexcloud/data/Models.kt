@@ -111,3 +111,21 @@ object Parse {
         }
     }
 }
+
+/** Wer angemeldet ist: Name und Profilbild (eigenes aus Plexora, sonst das von Google) */
+data class Profile(val name: String, val email: String, val pictureUrl: String?) {
+    val initials: String get() = (name.ifBlank { email.substringBefore('@') }).split(Regex("[\\s._-]+")).filter { it.isNotEmpty() }.take(2).joinToString("") { it.first().uppercase() }.ifEmpty { "?" }
+
+    companion object {
+        /** Google liefert das Bild in 96 px („=s96-c“); für den Kreis lieber schärfer */
+        fun sharper(url: String?): String? = url?.takeIf { it.startsWith("https://") }?.replace(Regex("=s\\d+-c$"), "=s256-c")
+
+        fun from(token: org.json.JSONObject?, account: org.json.JSONObject?): Profile {
+            val prof = account?.optJSONObject("profile")
+            val name = prof?.optString("name").orEmpty().ifBlank { token?.optString("name").orEmpty() }
+                .ifBlank { listOf(token?.optString("given_name").orEmpty(), token?.optString("family_name").orEmpty()).filter { it.isNotBlank() }.joinToString(" ") }
+            val pic = prof?.optString("avatarUrl").orEmpty().ifBlank { token?.optString("picture").orEmpty() }
+            return Profile(name.trim(), token?.optString("email").orEmpty(), sharper(pic.ifBlank { null }))
+        }
+    }
+}

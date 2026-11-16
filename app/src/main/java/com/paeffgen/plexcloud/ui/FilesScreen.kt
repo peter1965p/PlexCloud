@@ -63,6 +63,8 @@ fun FilesScreen(
     onRefresh: () -> Unit,
     onNewFolder: (String) -> Unit,
     onPickFiles: () -> Unit,
+    profile: com.paeffgen.plexcloud.data.Profile? = null,
+    onProfile: () -> Unit = {},
 ) {
     val p = LocalPlex.current
     var newFolder by remember { mutableStateOf(false) }
@@ -87,6 +89,7 @@ fun FilesScreen(
             }
             IconButton(onClick = { newFolder = true }) { PIcon(R.drawable.ic_folder_plus, "Neuer Ordner", p.textSoft) }
             IconButton(onClick = onPickFiles) { PIcon(R.drawable.ic_upload, "Dateien hochladen", p.textSoft) }
+            if (profile != null) Avatar(profile, 32.dp, Modifier.padding(start = 4.dp).clickable(onClick = onProfile))
         }
 
         listing?.usage?.let { StorageCard(it) }

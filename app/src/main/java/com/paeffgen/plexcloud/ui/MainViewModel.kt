@@ -109,8 +109,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Kamera-Foto, das gerade aufgenommen wird (Datei im Cache) */
     private var pendingPhoto: File? = null
 
+    private val _profile = MutableStateFlow<com.paeffgen.plexcloud.data.Profile?>(null)
+    val profile: StateFlow<com.paeffgen.plexcloud.data.Profile?> = _profile
+
     init {
-        viewModelScope.launch { tokens.collect { if (it != null) load(ROOT) } }
+        viewModelScope.launch {
+            tokens.collect { t ->
+                if (t == null) { _profile.value = null; return@collect }
+                load(ROOT)
+                // erst aus dem Token (sofort da), dann mit dem Plexora-Profil ergänzen
+                val claims = com.paeffgen.plexcloud.auth.Jwt.payload(t.idToken)
+                _profile.value = com.paeffgen.plexcloud.data.Profile.from(claims, null)
+                runCatching { app.api.account() }.onSuccess { _profile.value = com.paeffgen.plexcloud.data.Profile.from(claims, it) }
+            }
+        }
         // Sicherung nach einem Neustart des Handys oder einem App-Update wieder einplanen
         viewModelScope.launch {
             if (app.settings.photoBackup.first() || app.settings.folders.first().isNotEmpty()) BackupWorker.schedule(app)

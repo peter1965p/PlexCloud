@@ -262,7 +262,8 @@ private fun Main(vm: MainViewModel, email: String) {
                 Tab.Files -> {
                     val filter by vm.filter.collectAsStateWithLifecycle()
                     val lastSync by vm.lastSync.collectAsStateWithLifecycle()
-                    FilesScreen(folder, filter, lastSync, vm::setFilter, vm::open, vm::openCrumb, vm::refresh, { vm.createFolder(it) }, { picker.launch("*/*") })
+                    val profile by vm.profile.collectAsStateWithLifecycle()
+                    FilesScreen(folder, filter, lastSync, vm::setFilter, vm::open, vm::openCrumb, vm::refresh, { vm.createFolder(it) }, { picker.launch("*/*") }, profile, { vm.select(Tab.System) })
                 }
                 Tab.Uploads -> {
                     val rows by vm.uploads.collectAsStateWithLifecycle()
@@ -295,7 +296,8 @@ private fun Main(vm: MainViewModel, email: String) {
                         vm::setAccent, vm::setWifiOnly, vm::setAutoUpdate, { vm.checkForUpdates() },
                         { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/${BuildConfig.GITHUB_REPO}"))) },
                         vm::signOut,
-                    ) {
+                        profile = vm.profile.collectAsStateWithLifecycle().value,
+                        backup = {
                         val photos by vm.photoBackup.collectAsStateWithLifecycle()
                         val videos by vm.videoBackup.collectAsStateWithLifecycle()
                         val folders by vm.backupFolders.collectAsStateWithLifecycle()
@@ -317,7 +319,7 @@ private fun Main(vm: MainViewModel, email: String) {
                             onAlbums = { vm.loadAlbums(); albumDialog = false },
                             onCancel = { vm.cancelBackup() },
                         )
-                    }
+                    })
                 }
             }
         }

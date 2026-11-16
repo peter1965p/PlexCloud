@@ -2,6 +2,10 @@
 
 Alle Versionen von PlexCloud für Android. Der Abschnitt einer Version erscheint in der App als „Was ist neu“.
 
+## [0.2.7] - 2026-11-16
+
+- Neu: Profilbild. Nach der Anmeldung zeigt die App dein Bild oben rechts in „Dateien“ (Tippen öffnet „System“) und groß in „System“ mit deinem Namen. Es kommt aus deinem Plexora-Profil, sonst von Google; ohne Bild stehen dort deine Initialen
+
 ## [0.2.6] - 2026-11-16
 
 - Neu: Fotos landen in **Bilder/<Monat>**, Videos in **Videos/<Monat>**, gesicherte Ordner in **Dokumente**. Keine Ordner „Handy-Sicherung“ mehr

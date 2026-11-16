@@ -144,3 +144,18 @@ fun Dot(color: Color) = Box(Modifier.size(7.dp).clip(RoundedCornerShape(2.dp)).b
 @Composable
 fun MonoText(text: String, style: TextStyle, color: Color = LocalPlex.current.text, modifier: Modifier = Modifier) =
     Text(text, style = style, color = color, modifier = modifier, maxLines = 1)
+
+/** Profilbild im Kreis mit Akzent-Rand; ohne Bild (oder solange es lädt) die Initialen */
+@Composable
+fun Avatar(profile: com.paeffgen.plexcloud.data.Profile?, size: Dp, modifier: Modifier = Modifier) {
+    val p = LocalPlex.current
+    val img = profile?.pictureUrl?.let { rememberRemoteImage(it, "avatar:$it") }
+    Box(
+        modifier.size(size).clip(androidx.compose.foundation.shape.CircleShape).background(p.surface)
+            .border(1.5.dp, p.accent.copy(alpha = 0.7f), androidx.compose.foundation.shape.CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (img != null) androidx.compose.foundation.Image(img, profile.name.ifBlank { "Profilbild" }, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+        else androidx.compose.material3.Text(profile?.initials ?: "", color = p.accent, fontFamily = com.paeffgen.plexcloud.ui.theme.Mono, fontSize = androidx.compose.ui.unit.TextUnit(size.value * 0.36f, androidx.compose.ui.unit.TextUnitType.Sp))
+    }
+}

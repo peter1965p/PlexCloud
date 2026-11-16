@@ -71,13 +71,18 @@ fun SystemScreen(
     onSource: () -> Unit,
     onSignOut: () -> Unit,
     backup: @Composable () -> Unit = {},
+    profile: com.paeffgen.plexcloud.data.Profile? = null,
 ) {
     val p = LocalPlex.current
     var custom by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp)) {
-            Text("System", style = MaterialTheme.typography.headlineMedium, color = p.text)
-            Text("${usage?.plan?.ifEmpty { null } ?: "Plexora"} · $email", style = MonoSmall, color = p.muted, maxLines = 1)
+        Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("System", style = MaterialTheme.typography.headlineMedium, color = p.text)
+                if (!profile?.name.isNullOrBlank()) Text(profile!!.name, style = MaterialTheme.typography.bodyLarge, color = p.textSoft, maxLines = 1)
+                Text("${usage?.plan?.ifEmpty { null } ?: "Plexora"} · $email", style = MonoSmall, color = p.muted, maxLines = 1)
+            }
+            if (profile != null) Avatar(profile, 56.dp)
         }
 
         if (usage != null) {

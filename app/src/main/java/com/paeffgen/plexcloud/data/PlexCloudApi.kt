@@ -33,6 +33,9 @@ class PlexCloudApi(private val auth: AuthRepository) {
 
     suspend fun rename(itemId: String, name: String) { call("PATCH", "/items/${enc(itemId)}", JSONObject().put("name", name)) }
 
+    /** Plexora-Profil (Name, eigenes Profilbild) wie im Web unter Profil */
+    suspend fun account(): JSONObject = call("GET", "/api/settings/account")
+
     suspend fun move(itemId: String, parentId: String) { call("PATCH", "/items/${enc(itemId)}", JSONObject().put("parentId", parentId)) }
 
     suspend fun trash(itemId: String) { call("DELETE", "/items/${enc(itemId)}") }
@@ -78,7 +81,7 @@ class PlexCloudApi(private val auth: AuthRepository) {
     private suspend fun send(method: String, path: String, body: JSONObject?, query: Map<String, String>, token: String): JSONObject =
         withContext(Dispatchers.IO) {
             val qs = if (query.isEmpty()) "" else "?" + query.entries.joinToString("&") { "${enc(it.key)}=${enc(it.value)}" }
-            val c = URL("${BuildConfig.API_BASE}/api/plexcloud$path$qs").openConnection() as HttpURLConnection
+            val c = URL("${BuildConfig.API_BASE}${if (path.startsWith("/api/")) "" else "/api/plexcloud"}$path$qs").openConnection() as HttpURLConnection
             val start = System.nanoTime()
             try {
                 c.requestMethod = method
