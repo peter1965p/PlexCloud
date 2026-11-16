@@ -2,6 +2,13 @@
 
 Alle Versionen von PlexCloud für Android. Der Abschnitt einer Version erscheint in der App als „Was ist neu“.
 
+## [0.2.5] - 2026-11-16
+
+- Behoben: Fotos wurden doppelt hochgeladen, wenn zwei Sicherungsläufe gleichzeitig starteten. Jetzt läuft immer nur einer
+- Besser: Bei Netzfehlern (WLAN-Wechsel, Funkloch, „Unable to resolve host“) versucht die App es bis zu zehnmal mit wachsendem Abstand statt dreimal
+- Neu: Abgleich vor jedem Sicherungs-Upload. Liegt die Datei (gleicher Name, gleiche Größe) schon im Zielordner, wird sie übersprungen. „Auch vorhandene sichern“ lädt damit nur nach, was fehlt, und gibt es jetzt auch beim Ändern der Alben
+- Neu: „Erneut senden“ unter Uploads schickt fehlgeschlagene Dateien noch einmal; Fehler stehen oben in der Liste
+
 ## [0.2.4] - 2026-11-16
 
 - Neu: Sicherung abbrechen. Unter „Uploads“ und „System“ stoppt ein Tipp alle wartenden Sicherungs-Uploads; Hochgeladenes bleibt, ab dann nur neue Fotos

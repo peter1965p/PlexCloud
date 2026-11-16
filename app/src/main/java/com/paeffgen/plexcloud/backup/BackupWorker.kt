@@ -21,6 +21,8 @@ import com.paeffgen.plexcloud.PlexCloudApp
 import com.paeffgen.plexcloud.data.BackupFolder
 import com.paeffgen.plexcloud.data.ROOT
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.TimeUnit
 
 /**
@@ -31,7 +33,11 @@ import java.util.concurrent.TimeUnit
 class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     private val app get() = applicationContext as PlexCloudApp
 
-    override suspend fun doWork(): Result {
+    // Stündlich, „Galerie geändert“ und „Jetzt sichern“ sind getrennte Aufträge und könnten gleichzeitig laufen:
+    // dann läsen beide denselben Stand und reihten dieselben Fotos doppelt ein. Deshalb immer nur einer.
+    override suspend fun doWork(): Result = RUN_LOCK.withLock { run() }
+
+    private suspend fun run(): Result {
         if (app.auth.tokens.value == null) return Result.success()
         val s = app.settings
         val photos = s.photoBackup.first()
@@ -82,7 +88,10 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         }
         for (it in found.sortedBy { it.added }) {
             val parent = remote.ensure(BackupPaths.mediaPath(device, it.takenMs))
+            // Schon oben (gleicher Name und gleiche Größe im Zielordner) oder schon eingereiht: überspringen
+            if (remote.has(parent, it.name, it.size)) { since = maxOf(since, it.added); continue }
             app.uploads.enqueue(it.uri, it.name, it.mime, it.size, parent, wifiOnly, backup = true)
+            remote.remember(parent, it.name, it.size)
             since = maxOf(since, it.added)
             n++
         }
@@ -103,7 +112,9 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 if (child.isDirectory) { if (depth < 4) walk(child, sub + name, depth + 1); continue }
                 if (child.lastModified() <= f.sinceMs || child.length() <= 0) continue
                 val parent = remote.ensure(BackupPaths.folderPath(device, tree.name ?: "Ordner", sub))
+                if (remote.has(parent, name, child.length())) continue
                 app.uploads.enqueue(child.uri, name, child.type ?: "application/octet-stream", child.length(), parent, wifiOnly, backup = true)
+                remote.remember(parent, name, child.length())
                 n++
             }
         }
@@ -115,6 +126,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     private data class Item(val uri: Uri, val name: String, val mime: String, val size: Long, val added: Long, val takenMs: Long)
 
     companion object {
+        private val RUN_LOCK = Mutex()
         private const val PERIODIC = "backup_hourly"
         private const val ON_CHANGE = "backup_on_change"
         private const val NOW = "backup_now"
@@ -168,6 +180,15 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 /** Ordnerpfad in PlexCloud finden oder anlegen; merkt sich gefundene Ordner für den Lauf */
 class RemoteFolders(private val api: com.paeffgen.plexcloud.data.PlexCloudApi) {
     private val cache = HashMap<String, String>()
+    /** Inhalt je Zielordner: "name|größe", einmal je Lauf geladen */
+    private val contents = HashMap<String, MutableSet<String>>()
+
+    suspend fun has(folderId: String, name: String, size: Long): Boolean {
+        val set = contents.getOrPut(folderId) { api.listing(folderId).items.filter { !it.folder }.map { "${it.name.lowercase()}|${it.size}" }.toMutableSet() }
+        return "${name.lowercase()}|$size" in set
+    }
+
+    fun remember(folderId: String, name: String, size: Long) { contents[folderId]?.add("${name.lowercase()}|$size") }
 
     suspend fun ensure(path: List<String>): String {
         var parent = ROOT
@@ -177,7 +198,7 @@ class RemoteFolders(private val api: com.paeffgen.plexcloud.data.PlexCloudApi) {
             val hit = cache[key.toString()]
             if (hit != null) { parent = hit; continue }
             val existing = api.listing(parent).items.firstOrNull { it.folder && it.name.equals(name, ignoreCase = true) }
-            parent = existing?.itemId ?: api.createFolder(name, parent).itemId
+            parent = existing?.itemId ?: api.createFolder(name, parent).itemId.also { contents[it] = mutableSetOf() }
             cache[key.toString()] = parent
         }
         return parent

@@ -60,7 +60,9 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             if (e.status in 400..499 && e.status != 401 && e.status != 429) fail(e.message ?: "Fehler ${e.status}")
             else if (runAttemptCount < 3) Result.retry() else fail(e.message ?: "Fehler ${e.status}")
         } catch (e: IOException) {
-            if (runAttemptCount < 3) Result.retry() else fail(e.message ?: "Verbindung unterbrochen")
+            // Kein Netz, DNS weg, Zeitüberschreitung: das geht meist von selbst vorbei (WLAN-Wechsel, Funkloch), also länger dranbleiben
+            val network = e is java.net.UnknownHostException || e is java.net.SocketTimeoutException || e is java.net.ConnectException || e is java.net.SocketException
+            if (runAttemptCount < (if (network) 10 else 3)) Result.retry() else fail(if (network) "Keine Verbindung zum Speicher" else e.message ?: "Verbindung unterbrochen")
         }
     }
 

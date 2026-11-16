@@ -51,7 +51,7 @@ class Uploads(private val context: Context) {
                 sha256 = w.outputData.getString(UploadWorker.K_SHA),
                 error = w.outputData.getString(UploadWorker.K_ERROR),
             )
-        }.sortedWith(compareBy<UploadRow> { it.state.isFinished }.thenBy { it.name })
+        }.sortedWith(compareBy<UploadRow> { when (it.state) { WorkInfo.State.RUNNING -> 0; WorkInfo.State.FAILED -> 1; WorkInfo.State.SUCCEEDED -> 3; WorkInfo.State.CANCELLED -> 4; else -> 2 } }.thenBy { it.name })
     }
 
     /** Eine Datei aus dem App-Cache (Kamera-Foto, Scan oder Kopie einer geteilten Datei) einreihen; wird nach dem Upload gelöscht */
@@ -82,11 +82,32 @@ class Uploads(private val context: Context) {
             .apply { if (backup) addTag(TAG_BACKUP) }
             .addTag("n:$name")
             .addTag("s:$size")
+            .addTag("u:$uri")
+            .addTag("m:$mime")
+            .addTag("p:$parentId")
             .build()
         wm.enqueue(req)
     }
 
     fun cancel(id: UUID) { wm.cancelWorkById(id) }
+
+    /** Fehlgeschlagene Uploads neu einreihen (Kopien aus dem Cache nur, solange die Datei noch da ist) */
+    suspend fun retryFailed(wifiOnly: Boolean): Int {
+        val failed = wm.getWorkInfosByTag(UploadWorker.TAG).get().filter { it.state == WorkInfo.State.FAILED }
+        var n = 0
+        for (w in failed) {
+            fun tag(p: String) = w.tags.firstOrNull { it.startsWith(p) }?.removePrefix(p)
+            val uri = tag("u:") ?: continue
+            val parent = tag("p:") ?: continue
+            val u = Uri.parse(uri)
+            if (u.scheme == "file" && !File(u.path ?: "").exists()) continue
+            enqueue(u, tag("n:") ?: "Datei", tag("m:") ?: "application/octet-stream", tag("s:")?.toLongOrNull() ?: 0, parent, wifiOnly,
+                deleteAfter = u.scheme == "file", backup = TAG_BACKUP in w.tags)
+            n++
+        }
+        wm.pruneWork() // alte Fehler-Einträge aus der Liste
+        return n
+    }
 
     /** Alle Uploads der automatischen Sicherung stoppen, die noch warten oder laufen (fertige bleiben in PlexCloud) */
     fun cancelBackupUploads() { wm.cancelAllWorkByTag(TAG_BACKUP) }

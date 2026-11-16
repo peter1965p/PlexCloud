@@ -39,7 +39,7 @@ import com.paeffgen.plexcloud.upload.UploadRow
 import java.util.UUID
 
 @Composable
-fun UploadsScreen(rows: List<UploadRow>, wifiOnly: Boolean, onCancel: (UUID) -> Unit, onClear: () -> Unit, onCancelBackup: () -> Unit = {}, onCamera: () -> Unit) {
+fun UploadsScreen(rows: List<UploadRow>, wifiOnly: Boolean, onCancel: (UUID) -> Unit, onClear: () -> Unit, onCancelBackup: () -> Unit = {}, onRetry: () -> Unit = {}, onCamera: () -> Unit) {
     val p = LocalPlex.current
     val active = rows.filter { !it.state.isFinished }
     val done = rows.count { it.state == WorkInfo.State.SUCCEEDED }
@@ -54,10 +54,13 @@ fun UploadsScreen(rows: List<UploadRow>, wifiOnly: Boolean, onCancel: (UUID) -> 
         Row(Modifier.padding(start = 20.dp, end = 12.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Uploads", style = MaterialTheme.typography.titleLarge, color = p.text)
-                Text("${active.size} aktiv · $done fertig · ${if (wifiOnly) "nur WLAN" else "jedes Netz"}", style = MonoSmall, color = p.muted)
+                val errors = rows.count { it.state == WorkInfo.State.FAILED }
+                Text("${active.size} aktiv · $done fertig${if (errors > 0) " · $errors Fehler" else ""} · ${if (wifiOnly) "nur WLAN" else "jedes Netz"}", style = MonoSmall, color = p.muted)
             }
             val backupPending = rows.count { it.backup && !it.state.isFinished }
             if (backupPending > 0) androidx.compose.material3.TextButton(onClick = onCancelBackup) { Text("Sicherung abbrechen ($backupPending)", color = p.danger) }
+            val failed = rows.count { it.state == WorkInfo.State.FAILED }
+            if (failed > 0) androidx.compose.material3.TextButton(onClick = onRetry) { Text("Erneut senden ($failed)", color = p.accent) }
             if (rows.any { it.state.isFinished }) IconButton(onClick = onClear) { PIcon(R.drawable.ic_trash, "Fertige aus der Liste nehmen", p.textSoft) }
         }
 

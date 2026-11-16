@@ -209,7 +209,7 @@ private fun Main(vm: MainViewModel, email: String) {
                 albumDialog = null
                 // alle angehakt = „alle“ (dann kommen auch neue Alben automatisch dazu)
                 val sel = if (ids.size == albums.size) emptySet() else ids
-                if (enabling) { vm.enablePhotoBackup(existing, sel); askBattery() } else vm.setAlbums(sel)
+                if (enabling) { vm.enablePhotoBackup(existing, sel); askBattery() } else vm.setAlbums(sel, existing)
             },
             onDismiss = { albumDialog = null },
         )
@@ -267,7 +267,7 @@ private fun Main(vm: MainViewModel, email: String) {
                 Tab.Uploads -> {
                     val rows by vm.uploads.collectAsStateWithLifecycle()
                     val wifi by vm.wifiOnly.collectAsStateWithLifecycle()
-                    UploadsScreen(rows, wifi, vm::cancelUpload, vm::clearFinishedUploads, { vm.cancelBackup() }) { captureChoice = true }
+                    UploadsScreen(rows, wifi, vm::cancelUpload, vm::clearFinishedUploads, { vm.cancelBackup() }, { vm.retryFailedUploads() }) { captureChoice = true }
                 }
                 Tab.Recent -> {
                     val recent by vm.recent.collectAsStateWithLifecycle()

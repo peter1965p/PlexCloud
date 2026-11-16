@@ -172,12 +172,12 @@ fun AlbumDialog(
                         }
                     }
                 }
-                if (enabling) {
+                run {
                     HorizontalDivider(color = p.borderSoft, modifier = Modifier.padding(vertical = 8.dp))
                     Row(Modifier.fillMaxWidth().clickable { existing = !existing }, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Auch vorhandene sichern", color = p.text)
-                            Text(if (existing) "$count Dateien werden hochgeladen" else "nur, was ab jetzt dazukommt", style = MonoSmall, color = p.muted)
+                            Text(if (existing) "bis zu $count Dateien, schon Hochgeladenes wird übersprungen" else "nur, was ab jetzt dazukommt", style = MonoSmall, color = p.muted)
                         }
                         PlexSwitch(existing) { existing = it }
                     }

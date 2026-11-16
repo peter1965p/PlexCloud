@@ -121,7 +121,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Auswahl ändern, ohne den Stand zurückzusetzen (gilt für neue Fotos) */
-    fun setAlbums(ids: Set<String>) = viewModelScope.launch { app.settings.setAlbums(ids) }
+    fun setAlbums(ids: Set<String>, includeExisting: Boolean = false) = viewModelScope.launch {
+        app.settings.setAlbums(ids)
+        if (includeExisting) {
+            app.settings.setPhotoSince(0L)
+            BackupWorker.runNow(app)
+            events.send(UiEvent.Toast("Fehlende Fotos werden nachgeladen, vorhandene übersprungen"))
+        }
+    }
 
     /**
      * Sicherung abbrechen: wartende Uploads stoppen und den Stand auf jetzt setzen,
@@ -334,6 +341,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun cancelUpload(id: java.util.UUID) = app.uploads.cancel(id)
     fun clearFinishedUploads() = app.uploads.clearFinished()
+    fun retryFailedUploads() = viewModelScope.launch {
+        val n = withContext(Dispatchers.IO) { app.uploads.retryFailed(wifiOnly.value) }
+        events.send(UiEvent.Toast(if (n == 0) "Nichts zum Wiederholen (ältere Fehler ohne gemerkte Datei bitte neu sichern)" else "$n Dateien werden erneut gesendet"))
+    }
 
     // ── Einstellungen ──
     fun setAccent(argb: Long) = viewModelScope.launch { app.settings.setAccent(argb) }
