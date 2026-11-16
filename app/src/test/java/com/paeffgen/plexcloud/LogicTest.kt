@@ -163,3 +163,12 @@ class BackupTest {
         assertNull(com.paeffgen.plexcloud.data.BackupFolder.decode("12|"))
     }
 }
+
+class DeviceNameTest {
+    @Test fun samsungUsesNameFromSettings() {
+        assertEquals("Galaxy A16 5G", com.paeffgen.plexcloud.backup.BackupPaths.deviceName("samsung", "SM-A166B", "Galaxy A16 5G"))
+        assertEquals("Samsung SM-A166B", com.paeffgen.plexcloud.backup.BackupPaths.deviceName("samsung", "SM-A166B", "  "))
+        assertEquals("Samsung SM-A166B", com.paeffgen.plexcloud.backup.BackupPaths.deviceName("samsung", "SM-A166B", null))
+        assertEquals("Peters Handy", com.paeffgen.plexcloud.backup.BackupPaths.deviceName("samsung", "SM-A166B", "Peters/Handy"))
+    }
+}

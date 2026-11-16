@@ -34,6 +34,8 @@ data class BackupUi(
     val folders: List<BackupFolder>,
     val lastRun: Long,
     val lastCount: Long,
+    /** vom Energiesparen ausgenommen (sonst stoppt z. B. Samsung die Sicherung im Hintergrund) */
+    val batteryOk: Boolean = true,
 )
 
 /** Bereich „Sicherung“ unter „System“: Fotos/Videos automatisch, gewählte Ordner, Stand */
@@ -45,6 +47,7 @@ fun BackupSection(
     onAddFolder: () -> Unit,
     onRemoveFolder: (String) -> Unit,
     onNow: () -> Unit,
+    onBattery: () -> Unit = {},
 ) {
     val p = LocalPlex.current
     SectionLabel("Sicherung")
@@ -69,6 +72,12 @@ fun BackupSection(
         Row(Modifier.fillMaxWidth().clickable(onClick = onAddFolder).padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             PIcon(R.drawable.ic_folder_plus, null, p.accent, 18.dp)
             Text("  Ordner sichern (z. B. Download, Dokumente)", style = MaterialTheme.typography.bodyLarge, color = p.accent)
+        }
+        if ((ui.photos || ui.folders.isNotEmpty()) && !ui.batteryOk) {
+            HorizontalDivider(color = p.borderSoft)
+            BackupRow("Energiesparen bremst die Sicherung", "Tippen: PlexCloud im Hintergrund laufen lassen", onClick = onBattery) {
+                Text("!", style = MaterialTheme.typography.titleMedium, color = p.folder)
+            }
         }
         if (ui.photos || ui.folders.isNotEmpty()) {
             HorizontalDivider(color = p.borderSoft)

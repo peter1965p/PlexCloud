@@ -9,8 +9,12 @@ object BackupPaths {
     const val ROOT_NAME = "Handy-Sicherung"
     private val month = DateTimeFormatter.ofPattern("yyyy-MM")
 
-    /** Gerätename als Ordnername: „Pixel 8 Pro“ statt „google Pixel 8 Pro“, ohne Zeichen, die Dateinamen stören */
-    fun deviceName(manufacturer: String, model: String): String {
+    /**
+     * Gerätename als Ordnername. Zuerst der Name aus den Einstellungen des Handys („Galaxy A16 5G“),
+     * denn Samsung meldet als Modell nur die Typnummer („SM-A166B“). Sonst Hersteller + Modell, ohne doppelten Hersteller.
+     */
+    fun deviceName(manufacturer: String, model: String, userName: String? = null): String {
+        userName?.let(::clean)?.takeIf { it.isNotEmpty() }?.let { return it }
         val m = model.trim()
         val raw = if (m.lowercase().startsWith(manufacturer.trim().lowercase())) m else "${manufacturer.trim().replaceFirstChar { it.uppercase() }} $m"
         return clean(raw).ifEmpty { "Android" }

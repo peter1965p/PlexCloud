@@ -2,6 +2,11 @@
 
 Alle Versionen von PlexCloud für Android. Der Abschnitt einer Version erscheint in der App als „Was ist neu“.
 
+## [0.2.1] - 2026-11-16
+
+- Besser: Der Sicherungsordner heißt wie das Handy in den Einstellungen („Galaxy A16 5G“), nicht nach der Typnummer („SM-A166B“)
+- Neu: Beim Einschalten der Sicherung fragt die App, ob sie vom Energiesparen ausgenommen werden darf. Samsung beendet sonst Apps im Hintergrund, und die Sicherung liefe erst beim nächsten Öffnen. Steht noch „Energiesparen bremst die Sicherung“ unter „System“, genügt ein Tipp darauf
+
 ## [0.2.0] - 2026-11-16
 
 - Neu: Beim Tipp auf die Kamera fragt die App „Dokument oder Foto?“. Dokumente laufen durch den Scanner (Kanten erkennen, gerade ziehen, mehrere Seiten) und werden als PDF hochgeladen, Fotos als JPG

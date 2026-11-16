@@ -39,6 +39,8 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.paeffgen.plexcloud.backup.BackupWorker
+import com.paeffgen.plexcloud.backup.Battery
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.paeffgen.plexcloud.ui.BackupSection
 import com.paeffgen.plexcloud.ui.BackupUi
 import com.paeffgen.plexcloud.ui.CaptureSheet
@@ -186,8 +188,18 @@ private fun Main(vm: MainViewModel, email: String) {
         if (BackupWorker.hasMediaPermission(ctx)) photoDialog = true
         else Toast.makeText(ctx, "Ohne Zugriff auf Fotos kann PlexCloud nichts sichern", Toast.LENGTH_LONG).show()
     }
-    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> if (uri != null) vm.addBackupFolder(uri) }
-    if (photoDialog) PhotoBackupDialog(onChoice = { all -> photoDialog = false; vm.enablePhotoBackup(all) }, onDismiss = { photoDialog = false })
+    // Energiesparen: Zustand bei jeder Rückkehr in die App neu lesen (der Nutzer ändert ihn im System-Dialog)
+    var batteryOk by remember { mutableStateOf(Battery.unrestricted(ctx)) }
+    LifecycleResumeEffect(Unit) { batteryOk = Battery.unrestricted(ctx); onPauseOrDispose { } }
+    val askBattery = {
+        if (!Battery.unrestricted(ctx)) {
+            runCatching { ctx.startActivity(Battery.requestIntent(ctx)) }
+                .recoverCatching { ctx.startActivity(Battery.settingsIntent()) }
+        }
+        Unit
+    }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> if (uri != null) { vm.addBackupFolder(uri); askBattery() } }
+    if (photoDialog) PhotoBackupDialog(onChoice = { all -> photoDialog = false; vm.enablePhotoBackup(all); askBattery() }, onDismiss = { photoDialog = false })
     val askPhotos = {
         val perms = when {
             Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
@@ -275,12 +287,13 @@ private fun Main(vm: MainViewModel, email: String) {
                         val folders by vm.backupFolders.collectAsStateWithLifecycle()
                         val last by vm.lastBackup.collectAsStateWithLifecycle()
                         BackupSection(
-                            BackupUi(photos, videos, folders, last.first, last.second),
+                            BackupUi(photos, videos, folders, last.first, last.second, batteryOk),
                             onPhotos = { on -> if (on) askPhotos() else vm.disablePhotoBackup() },
                             onVideos = { vm.setVideoBackup(it) },
                             onAddFolder = { folderPicker.launch(null) },
                             onRemoveFolder = { vm.removeBackupFolder(it) },
                             onNow = { vm.backupNow() },
+                            onBattery = { askBattery() },
                         )
                     }
                 }

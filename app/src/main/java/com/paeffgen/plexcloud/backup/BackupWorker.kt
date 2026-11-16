@@ -39,7 +39,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val folders = s.folders.first()
         if (!photos && folders.isEmpty()) return Result.success()
         val wifiOnly = s.wifiOnly.first()
-        val device = BackupPaths.deviceName(Build.MANUFACTURER, Build.MODEL)
+        val device = BackupPaths.deviceName(Build.MANUFACTURER, Build.MODEL, runCatching { android.provider.Settings.Global.getString(applicationContext.contentResolver, android.provider.Settings.Global.DEVICE_NAME) }.getOrNull())
         val remote = RemoteFolders(app.api)
         var count = 0L
         return try {
