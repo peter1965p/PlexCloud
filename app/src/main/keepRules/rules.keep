@@ -1,0 +1,4 @@
+# Eigene R8-Regeln (AGP fasst alle Dateien in src/main/keepRules zusammen).
+# Die App nutzt keine Reflexion; WorkManager-Worker werden über ihren Klassennamen gestartet.
+-keep class com.paeffgen.plexcloud.upload.UploadWorker { <init>(...); }
+-keep class com.paeffgen.plexcloud.update.UpdateWorker { <init>(...); }
