@@ -6,7 +6,12 @@ import java.time.format.DateTimeFormatter
 
 /** Wohin die Sicherung legt, rein und ohne Android (testbar) */
 object BackupPaths {
-    const val ROOT_NAME = "Handy-Sicherung"
+    /** Ziele in PlexCloud: Fotos nach Bilder, Videos nach Videos, gesicherte Ordner nach Dokumente */
+    const val PHOTOS = "Bilder"
+    const val VIDEOS = "Videos"
+    const val DOCS = "Dokumente"
+    /** Ziel bis 0.2.5: Handy-Sicherung/<Gerät>/Fotos/<Monat> (wird beim Umzug aufgelöst) */
+    const val OLD_ROOT = "Handy-Sicherung"
     private val month = DateTimeFormatter.ofPattern("yyyy-MM")
 
     /**
@@ -20,13 +25,19 @@ object BackupPaths {
         return clean(raw).ifEmpty { "Android" }
     }
 
-    /** Fotos und Videos: Handy-Sicherung/<Gerät>/Fotos/2026-11 */
-    fun mediaPath(device: String, takenMs: Long, zone: ZoneId = ZoneId.systemDefault()): List<String> =
-        listOf(ROOT_NAME, device, "Fotos", month.format(Instant.ofEpochMilli(takenMs).atZone(zone)))
+    /** Fotos: Bilder/2026-11, Videos: Videos/2026-11 (Aufnahmemonat) */
+    fun mediaPath(takenMs: Long, video: Boolean = false, zone: ZoneId = ZoneId.systemDefault()): List<String> =
+        listOf(if (video) VIDEOS else PHOTOS, month.format(Instant.ofEpochMilli(takenMs).atZone(zone)))
 
-    /** Ordner: Handy-Sicherung/<Gerät>/<Ordnername>/<Unterordner …> */
-    fun folderPath(device: String, folderName: String, sub: List<String> = emptyList()): List<String> =
-        listOf(ROOT_NAME, device, clean(folderName).ifEmpty { "Ordner" }) + sub.map { clean(it).ifEmpty { "_" } }
+    /** Gesicherter Ordner: Dokumente/<Ordnername>/<Unterordner …> */
+    fun folderPath(folderName: String, sub: List<String> = emptyList()): List<String> =
+        listOf(DOCS, clean(folderName).ifEmpty { "Ordner" }) + sub.map { clean(it).ifEmpty { "_" } }
+
+    /** alter Sicherungsordner, auch die Doppelgänger „Handy-Sicherung (2)“ */
+    fun isOldRoot(name: String) = name == OLD_ROOT || Regex("^${OLD_ROOT} \\(\\d+\\)$").matches(name)
+
+    /** „IMG_1 (2).jpg“ → „img_1.jpg“: PlexCloud hängt bei gleichem Namen „ (2)“ an */
+    fun baseName(name: String) = name.lowercase().replace(Regex(" \\(\\d+\\)(?=(\\.[^.]*)?$)"), "")
 
     /** Zeichen entfernen, die PlexCloud in Namen nicht mag, und auf 120 Zeichen kürzen */
     fun clean(s: String): String = s.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), " ").replace(Regex("\\s+"), " ").trim().take(120)

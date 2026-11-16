@@ -147,12 +147,21 @@ class BackupTest {
 
     @Test fun mediaGoesIntoMonthFolder() {
         val ms = java.time.Instant.parse("2026-11-30T23:30:00Z").toEpochMilli() // in Berlin schon Dezember
-        assertEquals(listOf("Handy-Sicherung", "Pixel 8", "Fotos", "2026-12"), com.paeffgen.plexcloud.backup.BackupPaths.mediaPath("Pixel 8", ms, berlin))
+        assertEquals(listOf("Bilder", "2026-12"), com.paeffgen.plexcloud.backup.BackupPaths.mediaPath(ms, zone = berlin))
+        assertEquals(listOf("Videos", "2026-12"), com.paeffgen.plexcloud.backup.BackupPaths.mediaPath(ms, video = true, zone = berlin))
+    }
+
+    @Test fun oldRootAndBaseName() {
+        val bp = com.paeffgen.plexcloud.backup.BackupPaths
+        assertTrue(bp.isOldRoot("Handy-Sicherung")); assertTrue(bp.isOldRoot("Handy-Sicherung (2)"))
+        assertTrue(!bp.isOldRoot("Handy-Sicherung alt")); assertTrue(!bp.isOldRoot("Bilder"))
+        assertEquals("img_1.jpg", bp.baseName("IMG_1 (2).jpg"))
+        assertEquals("scan (2) final.pdf", bp.baseName("Scan (2) final.pdf"))
     }
 
     @Test fun folderPathIsCleaned() {
-        assertEquals(listOf("Handy-Sicherung", "Pixel 8", "Download", "Rechnungen 2026"),
-            com.paeffgen.plexcloud.backup.BackupPaths.folderPath("Pixel 8", "Download", listOf("Rechnungen/2026")))
+        assertEquals(listOf("Dokumente", "Download", "Rechnungen 2026"),
+            com.paeffgen.plexcloud.backup.BackupPaths.folderPath("Download", listOf("Rechnungen/2026")))
         assertEquals("a b", com.paeffgen.plexcloud.backup.BackupPaths.clean("a:*?\"<>|b"))
     }
 

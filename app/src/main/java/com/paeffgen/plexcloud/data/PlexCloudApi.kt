@@ -33,6 +33,8 @@ class PlexCloudApi(private val auth: AuthRepository) {
 
     suspend fun rename(itemId: String, name: String) { call("PATCH", "/items/${enc(itemId)}", JSONObject().put("name", name)) }
 
+    suspend fun move(itemId: String, parentId: String) { call("PATCH", "/items/${enc(itemId)}", JSONObject().put("parentId", parentId)) }
+
     suspend fun trash(itemId: String) { call("DELETE", "/items/${enc(itemId)}") }
 
     /** Signierter Link, 5 Minuten gültig. inline = im Browser ansehen statt herunterladen. */

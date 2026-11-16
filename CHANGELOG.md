@@ -2,6 +2,12 @@
 
 Alle Versionen von PlexCloud für Android. Der Abschnitt einer Version erscheint in der App als „Was ist neu“.
 
+## [0.2.6] - 2026-11-16
+
+- Neu: Fotos landen in **Bilder/<Monat>**, Videos in **Videos/<Monat>**, gesicherte Ordner in **Dokumente**. Keine Ordner „Handy-Sicherung“ mehr
+- Neu: Umzug beim ersten Lauf. Was schon in „Handy-Sicherung“ liegt, wandert nach Bilder bzw. Dokumente; doppelte Kopien kommen dabei in den Papierkorb, danach der leere alte Ordner
+- Kamera und Scanner: im Stamm geht ein Foto nach Bilder und ein Scan nach Dokumente; in einem geöffneten Ordner bleibt es dort
+
 ## [0.2.5] - 2026-11-16
 
 - Behoben: Fotos wurden doppelt hochgeladen, wenn zwei Sicherungsläufe gleichzeitig starteten. Jetzt läuft immer nur einer

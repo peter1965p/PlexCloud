@@ -45,12 +45,12 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val folders = s.folders.first()
         if (!photos && folders.isEmpty()) return Result.success()
         val wifiOnly = s.wifiOnly.first()
-        val device = BackupPaths.deviceName(Build.MANUFACTURER, Build.MODEL, runCatching { android.provider.Settings.Global.getString(applicationContext.contentResolver, android.provider.Settings.Global.DEVICE_NAME) }.getOrNull())
         val remote = RemoteFolders(app.api)
         var count = 0L
         return try {
-            if (photos && hasMediaPermission(applicationContext)) count += backupMedia(remote, device, videos, wifiOnly)
-            for (f in folders) count += backupFolder(remote, device, f, wifiOnly)
+            if (!s.moved.first()) { Umzug.run(app.api, remote); s.setMoved() }
+            if (photos && hasMediaPermission(applicationContext)) count += backupMedia(remote, videos, wifiOnly)
+            for (f in folders) count += backupFolder(remote, f, wifiOnly)
             s.setLastBackup(System.currentTimeMillis(), count)
             Result.success()
         } catch (e: java.io.IOException) {
@@ -62,7 +62,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     }
 
     /** Galerie: alles mit DATE_ADDED nach dem gemerkten Stand, älteste zuerst, höchstens 500 je Lauf */
-    private suspend fun backupMedia(remote: RemoteFolders, device: String, videos: Boolean, wifiOnly: Boolean): Long {
+    private suspend fun backupMedia(remote: RemoteFolders, videos: Boolean, wifiOnly: Boolean): Long {
         var since = app.settings.photoSince.first()
         val albums = app.settings.albums.first()
         var n = 0L
@@ -87,7 +87,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             }
         }
         for (it in found.sortedBy { it.added }) {
-            val parent = remote.ensure(BackupPaths.mediaPath(device, it.takenMs))
+            val parent = remote.ensure(BackupPaths.mediaPath(it.takenMs, video = it.mime.startsWith("video/")))
             // Schon oben (gleicher Name und gleiche Größe im Zielordner) oder schon eingereiht: überspringen
             if (remote.has(parent, it.name, it.size)) { since = maxOf(since, it.added); continue }
             app.uploads.enqueue(it.uri, it.name, it.mime, it.size, parent, wifiOnly, backup = true)
@@ -100,7 +100,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     }
 
     /** Gewählter Ordner (Dateiauswähler des Systems): alle Dateien, die seit dem letzten Lauf geändert wurden, bis 4 Ebenen tief */
-    private suspend fun backupFolder(remote: RemoteFolders, device: String, f: BackupFolder, wifiOnly: Boolean): Long {
+    private suspend fun backupFolder(remote: RemoteFolders, f: BackupFolder, wifiOnly: Boolean): Long {
         val tree = DocumentFile.fromTreeUri(applicationContext, Uri.parse(f.uri)) ?: return 0
         if (!tree.canRead()) return 0 // Zugriff entzogen: in „System“ neu wählen
         val start = System.currentTimeMillis()
@@ -111,7 +111,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 if (name.startsWith(".")) continue
                 if (child.isDirectory) { if (depth < 4) walk(child, sub + name, depth + 1); continue }
                 if (child.lastModified() <= f.sinceMs || child.length() <= 0) continue
-                val parent = remote.ensure(BackupPaths.folderPath(device, tree.name ?: "Ordner", sub))
+                val parent = remote.ensure(BackupPaths.folderPath(tree.name ?: "Ordner", sub))
                 if (remote.has(parent, name, child.length())) continue
                 app.uploads.enqueue(child.uri, name, child.type ?: "application/octet-stream", child.length(), parent, wifiOnly, backup = true)
                 remote.remember(parent, name, child.length())
@@ -188,6 +188,13 @@ class RemoteFolders(private val api: com.paeffgen.plexcloud.data.PlexCloudApi) {
         return "${name.lowercase()}|$size" in set
     }
 
+    /** wie [has], aber „IMG_1 (2).jpg“ zählt wie „IMG_1.jpg“ */
+    suspend fun hasLike(folderId: String, name: String, size: Long): Boolean {
+        has(folderId, name, size)
+        val want = "${BackupPaths.baseName(name)}|$size"
+        return contents[folderId]!!.any { e -> "${BackupPaths.baseName(e.substringBeforeLast('|'))}|${e.substringAfterLast('|')}" == want }
+    }
+
     fun remember(folderId: String, name: String, size: Long) { contents[folderId]?.add("${name.lowercase()}|$size") }
 
     suspend fun ensure(path: List<String>): String {
@@ -202,6 +209,33 @@ class RemoteFolders(private val api: com.paeffgen.plexcloud.data.PlexCloudApi) {
             cache[key.toString()] = parent
         }
         return parent
+    }
+}
+
+/**
+ * Einmaliger Umzug aus der alten Ablage (bis 0.2.5): Handy-Sicherung/<Gerät>/Fotos/<Monat> → Bilder/<Monat> (Videos → Videos/<Monat>),
+ * andere gesicherte Ordner → Dokumente. Was im Ziel schon liegt (gleicher Name ohne „ (2)“, gleiche Größe), kommt in den Papierkorb.
+ * Zum Schluss wandert der leere alte Ordner (samt unfertiger Uploads) in den Papierkorb. Bricht etwas ab, läuft es beim nächsten Mal weiter.
+ */
+object Umzug {
+    suspend fun run(api: com.paeffgen.plexcloud.data.PlexCloudApi, remote: RemoteFolders): Int {
+        var moved = 0
+        for (root in api.listing(ROOT).items.filter { it.folder && BackupPaths.isOldRoot(it.name) }) {
+            for (device in api.listing(root.itemId).items.filter { it.folder }) {
+                for (kind in api.listing(device.itemId).items.filter { it.folder }) {
+                    if (kind.name != "Fotos") { api.move(kind.itemId, remote.ensure(listOf(BackupPaths.DOCS))); continue }
+                    for (month in api.listing(kind.itemId).items.filter { it.folder }) {
+                        for (f in api.listing(month.itemId).items.filter { !it.folder }) {
+                            val target = remote.ensure(listOf(if (f.contentType.startsWith("video/")) BackupPaths.VIDEOS else BackupPaths.PHOTOS, month.name))
+                            if (remote.hasLike(target, f.name, f.size)) api.trash(f.itemId)
+                            else { api.move(f.itemId, target); remote.remember(target, f.name, f.size); moved++ }
+                        }
+                    }
+                }
+            }
+            api.trash(root.itemId)
+        }
+        return moved
     }
 }
 

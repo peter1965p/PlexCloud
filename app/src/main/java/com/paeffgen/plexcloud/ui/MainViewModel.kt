@@ -9,7 +9,9 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.paeffgen.plexcloud.PlexCloudApp
+import com.paeffgen.plexcloud.backup.BackupPaths
 import com.paeffgen.plexcloud.backup.BackupWorker
+import com.paeffgen.plexcloud.backup.RemoteFolders
 import com.paeffgen.plexcloud.data.BackupFolder
 import android.content.Intent
 import com.paeffgen.plexcloud.auth.AuthRepository
@@ -186,7 +188,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }.getOrNull()
         }
         if (f == null || f.length() == 0L) { events.send(UiEvent.Toast("Scan konnte nicht gelesen werden")); return@launch }
-        app.uploads.enqueue(f, name, "application/pdf", _folder.value.folderId, wifiOnly.value)
+        app.uploads.enqueue(f, name, "application/pdf", target(BackupPaths.DOCS), wifiOnly.value)
         events.send(UiEvent.Toast("$pages ${if (pages == 1) "Seite" else "Seiten"} als PDF hochladen"))
         _tab.value = Tab.Uploads
     }
@@ -322,8 +324,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val f = pendingPhoto ?: return
         pendingPhoto = null
         if (!ok || f.length() == 0L) { f.delete(); return }
-        app.uploads.enqueue(f, f.name, "image/jpeg", _folder.value.folderId, wifiOnly.value)
-        _tab.value = Tab.Uploads
+        viewModelScope.launch {
+            app.uploads.enqueue(f, f.name, "image/jpeg", target(BackupPaths.PHOTOS), wifiOnly.value)
+            _tab.value = Tab.Uploads
+        }
+    }
+
+    /** Kamera und Scanner: im Stamm nach Bilder bzw. Dokumente, in einem geöffneten Ordner dorthin */
+    private suspend fun target(rootFolder: String): String {
+        val here = _folder.value.folderId
+        if (here != ROOT) return here
+        return runCatching { RemoteFolders(app.api).ensure(listOf(rootFolder)) }.getOrDefault(here)
     }
 
     /** Dateien aus der Auswahl oder per „Teilen“ aus anderen Apps */
